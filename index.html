@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบสำรวจความต้องการติดตั้งอุปกรณ์ WiFi กรมทางหลวง</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- PapaParse for CSV reading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f3f4f6;
+        }
+        
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 0.5rem;
+            z-index: 10;
+        }
+
+        .custom-popup .leaflet-popup-content-wrapper {
+            background: #ffffff;
+            color: #1f2937;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .custom-popup .leaflet-popup-tip {
+            background: #ffffff;
+        }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-blue-800 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <i class="fa-solid fa-satellite-dish text-2xl text-blue-300"></i>
+                    <div>
+                        <h1 class="text-lg font-bold truncate max-w-md md:max-w-xl lg:max-w-2xl">ระบบสำรวจความต้องการติดตั้งอุปกรณ์ WiFi กรมทางหลวง</h1>
+                        <p class="text-xs text-blue-200">สำหรับการวางแผนและพิจารณางบประมาณประจำปี 2570</p>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <button onclick="generateGlobalSummary()" class="bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center whitespace-nowrap hidden sm:flex">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> ✨ AI สรุปรายงานสำหรับผู้บริหาร
+                    </button>
+                    <button onclick="generateGlobalSummary()" class="bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 w-9 h-9 flex justify-center items-center rounded-lg text-sm font-medium transition shadow-sm sm:hidden" title="AI สรุปรายงานสำหรับผู้บริหาร">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full flex flex-col gap-6">
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-100 border-l-4 border-l-blue-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase">หน่วยงานทั้งหมด</p>
+                        <h3 class="text-2xl font-bold text-gray-800 mt-1" id="kpi-total">0</h3>
+                    </div>
+                    <div class="bg-blue-100 p-2 rounded-lg text-blue-600">
+                        <i class="fa-solid fa-building"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-100 border-l-4 border-l-purple-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase">ภูมิภาคที่ครอบคลุม</p>
+                        <h3 class="text-2xl font-bold text-gray-800 mt-1" id="kpi-regions">0</h3>
+                    </div>
+                    <div class="bg-purple-100 p-2 rounded-lg text-purple-600">
+                        <i class="fa-solid fa-map-location-dot"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-100 border-l-4 border-l-yellow-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase">เป้าหมายจุดติดตั้งใหม่</p>
+                        <h3 class="text-2xl font-bold text-gray-800 mt-1">ขั้นต่ำ 5 จุด</h3>
+                    </div>
+                    <div class="bg-yellow-100 p-2 rounded-lg text-yellow-600">
+                        <i class="fa-solid fa-wifi"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-100 border-l-4 border-l-green-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase">สถานะระบบสำรวจ</p>
+                        <h3 class="text-2xl font-bold text-gray-800 mt-1 text-green-600">พร้อมใช้งาน</h3>
+                    </div>
+                    <div class="bg-green-100 p-2 rounded-lg text-green-600">
+                        <i class="fa-solid fa-check-double"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map & Context -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+            <!-- Map Container -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-sm p-2 border border-gray-100 relative">
+                <!-- Map Layer Controls overlay -->
+                <div class="absolute top-4 right-4 z-[400] bg-white rounded-lg shadow-md overflow-hidden text-sm font-medium border border-gray-200">
+                    <button id="btn-satellite" class="px-4 py-2 bg-blue-50 text-blue-700 w-full text-left hover:bg-blue-100 transition border-b border-gray-200 flex justify-between items-center">
+                        <span><i class="fa-solid fa-satellite mr-2"></i> ภาพถ่ายดาวเทียม</span>
+                        <i class="fa-solid fa-check text-blue-600"></i>
+                    </button>
+                    <button id="btn-street" class="px-4 py-2 text-gray-600 w-full text-left hover:bg-gray-50 transition flex justify-between items-center">
+                        <span><i class="fa-solid fa-road mr-2"></i> แผนที่ถนน (Street)</span>
+                        <i class="fa-solid fa-check text-white"></i>
+                    </button>
+                </div>
+                
+                <div id="map"></div>
+                <div class="mt-2 flex items-center justify-between px-2 text-xs text-gray-500">
+                    <span>* การใช้ภาพถ่ายดาวเทียมช่วยให้คณะกรรมการประเมินภูมิประเทศจริงก่อนจัดสรรงบประมาณ</span>
+                    <span>ระบบรองรับการคลิกที่หมุดเพื่อส่งแบบฟอร์มสำรวจ</span>
+                </div>
+            </div>
+
+            <!-- List / Action Area -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+                <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="font-bold text-gray-800">รายการหน่วยงานเป้าหมาย</h3>
+                    <span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full" id="list-count">0 รายการ</span>
+                </div>
+                <div class="p-3 border-b border-gray-100">
+                    <div class="relative">
+                        <input type="text" id="searchInput" placeholder="ค้นหาชื่อ, ภูมิภาค หรือจังหวัด..." class="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <i class="fa-solid fa-search absolute left-3 top-2.5 text-gray-400"></i>
+                    </div>
+                </div>
+                <div class="flex-grow overflow-y-auto p-2 space-y-2" id="site-list" style="max-height: 400px;">
+                    <!-- List items will be injected here via JS -->
+                    <div class="text-center text-gray-400 py-8 text-sm" id="loading-indicator">
+                        <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>กำลังโหลดข้อมูลพิกัด...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- AI Modal -->
+    <div id="aiModal" class="fixed inset-0 bg-black bg-opacity-50 z-[1000] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[80vh] border border-indigo-100">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-purple-50 rounded-t-xl">
+                <h3 class="font-bold text-indigo-800 text-lg flex items-center"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-purple-500"></i> <span id="aiModalTitle">AI Assistant</span></h3>
+                <button onclick="closeAIModal()" class="text-gray-400 hover:text-red-500 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-grow text-gray-700 leading-relaxed text-sm" id="aiModalContent">
+                <div class="flex flex-col items-center justify-center py-8 text-indigo-400">
+                    <i class="fa-solid fa-circle-notch fa-spin text-4xl mb-4"></i>
+                    <p>กำลังประมวลผลด้วย Gemini AI...</p>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-xl">
+                <button onclick="copyAIContent(event)" class="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-4 py-2 rounded-lg text-sm font-medium transition mr-2 flex items-center">
+                    <i class="fa-regular fa-copy mr-2"></i> คัดลอกข้อความ
+                </button>
+                <button onclick="closeAIModal()" class="bg-gray-800 text-white hover:bg-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition">
+                    ปิดหน้าต่าง
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ===================================================================== -->
+    <!-- 📊 พื้นที่ฝังข้อมูล CSV (Embedded Data)                                  -->
+    <!-- วิธีใช้: ก๊อปปี้ข้อมูลจากไฟล์ CSV ของคุณทั้งหมด มาวางทับข้อความตัวอย่างด้านล่างนี้ -->
+    <!-- ===================================================================== -->
+    <script id="csv-data" type="text/csv">id,site_name,region,province,lat,lng,Google_Maps_Link
+[1,สำนักงานทางหลวงที่ 1 (เชียงใหม่),ภาคเหนือ,เชียงใหม่,18.7966,98.9669,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+1+เชียงใหม่
+2,แขวงทางหลวงเชียงใหม่ที่ 1,ภาคเหนือ,เชียงใหม่,18.7966,98.9669,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเชียงใหม่ที่+1
+3,แขวงทางหลวงเชียงใหม่ที่ 2,ภาคเหนือ,เชียงใหม่,18.79,99,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเชียงใหม่ที่+2
+4,แขวงทางหลวงเชียงใหม่ที่ 3,ภาคเหนือ,เชียงใหม่,18.85,98.95,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเชียงใหม่ที่+3
+5,แขวงทางหลวงลำพูน,ภาคเหนือ,ลำพูน,18.57,99,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงลำพูน
+6,แขวงทางหลวงลำปางที่ 1,ภาคเหนือ,ลำปาง,18.28,99.49,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงลำปางที่+1
+7,แขวงทางหลวงลำปางที่ 2,ภาคเหนือ,ลำปาง,18.29,99.5,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงลำปางที่+2
+8,แขวงทางหลวงแม่ฮ่องสอน,ภาคเหนือ,แม่ฮ่องสอน,19.3,97.96,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงแม่ฮ่องสอน
+9,สำนักงานทางหลวงที่ 2 (แพร่),ภาคเหนือ,แพร่,18.14,100.14,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+2+แพร่
+10,แขวงทางหลวงแพร่,ภาคเหนือ,แพร่,18.14,100.14,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงแพร่
+11,แขวงทางหลวงน่านที่ 1,ภาคเหนือ,น่าน,18.77,100.77,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงน่านที่+1
+12,แขวงทางหลวงน่านที่ 2,ภาคเหนือ,น่าน,18.78,100.78,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงน่านที่+2
+13,แขวงทางหลวงพะเยา,ภาคเหนือ,พะเยา,19.16,99.9,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงพะเยา
+14,แขวงทางหลวงเชียงรายที่ 1,ภาคเหนือ,เชียงราย,19.9,99.83,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเชียงรายที่+1
+15,แขวงทางหลวงเชียงรายที่ 2,ภาคเหนือ,เชียงราย,19.91,99.84,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเชียงรายที่+2
+16,สำนักงานทางหลวงที่ 3 (สกลนคร),ภาคอีสาน,สกลนคร,17.1663,104.148,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+3+สกลนคร
+17,แขวงทางหลวงสกลนครที่ 1,ภาคอีสาน,สกลนคร,17.1663,104.148,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสกลนครที่+1
+18,แขวงทางหลวงสกลนครที่ 2 (สว่างแดนดิน),ภาคอีสาน,สกลนคร,17.47,103.45,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสกลนครที่+2
+19,แขวงทางหลวงนครพนม,ภาคอีสาน,นครพนม,17.4,104.78,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครพนม
+20,แขวงทางหลวงหนองคาย,ภาคอีสาน,หนองคาย,17.88,102.74,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงหนองคาย
+21,แขวงทางหลวงบึงกาฬ,ภาคอีสาน,บึงกาฬ,18.36,103.65,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงบึงกาฬ
+22,แขวงทางหลวงมุกดาหาร,ภาคอีสาน,มุกดาหาร,16.54,104.72,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงมุกดาหาร
+23,สำนักงานทางหลวงที่ 4 (ตาก),ภาคตะวันตก,ตาก,16.88,99.12,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+4+ตาก
+24,แขวงทางหลวงตากที่ 1,ภาคตะวันตก,ตาก,16.88,99.12,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงตากที่+1
+25,แขวงทางหลวงตากที่ 2,ภาคตะวันตก,ตาก,16.71,98.57,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงตากที่+2
+26,แขวงทางหลวงกำแพงเพชร,ภาคกลาง,กำแพงเพชร,16.48,99.52,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงกำแพงเพชร
+27,สำนักงานทางหลวงที่ 5 (พิษณุโลก),ภาคกลาง,พิษณุโลก,16.82,100.26,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+5+พิษณุโลก
+28,แขวงทางหลวงพิษณุโลกที่ 1,ภาคกลาง,พิษณุโลก,16.82,100.26,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงพิษณุโลกที่+1
+29,แขวงทางหลวงพิษณุโลกที่ 2 (วังทอง),ภาคกลาง,พิษณุโลก,16.82,100.43,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงพิษณุโลกที่+2
+30,แขวงทางหลวงสุโขทัย,ภาคกลาง,สุโขทัย,17,99.82,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสุโขทัย
+31,แขวงทางหลวงพิจิตร,ภาคกลาง,พิจิตร,16.44,100.35,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงพิจิตร
+32,แขวงทางหลวงอุตรดิตถ์ที่ 1,ภาคเหนือ,อุตรดิตถ์,17.62,100.09,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอุตรดิตถ์ที่+1
+33,แขวงทางหลวงอุตรดิตถ์ที่ 2,ภาคเหนือ,อุตรดิตถ์,17.62,100.1,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอุตรดิตถ์ที่+2
+34,สำนักงานทางหลวงที่ 6 (เพชรบูรณ์),ภาคกลาง,เพชรบูรณ์,16.41,101.15,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+6+เพชรบูรณ์
+35,แขวงทางหลวงเพชรบูรณ์ที่ 1,ภาคกลาง,เพชรบูรณ์,16.41,101.15,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเพชรบูรณ์ที่+1
+36,แขวงทางหลวงเพชรบูรณ์ที่ 2 (บึงสามพัน),ภาคกลาง,เพชรบูรณ์,15.79,101.03,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเพชรบูรณ์ที่+2
+37,แขวงทางหลวงเลยที่ 1,ภาคอีสาน,เลย,17.48,101.72,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเลยที่+1
+38,แขวงทางหลวงเลยที่ 2 (ด่านซ้าย),ภาคอีสาน,เลย,17.28,101.15,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเลยที่+2
+39,แขวงทางหลวงหนองบัวลำภู,ภาคอีสาน,หนองบัวลำภู,17.2,102.44,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงหนองบัวลำภู
+40,สำนักงานทางหลวงที่ 7 (ขอนแก่น),ภาคอีสาน,ขอนแก่น,16.43,102.83,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+7+ขอนแก่น
+41,แขวงทางหลวงขอนแก่นที่ 1,ภาคอีสาน,ขอนแก่น,16.43,102.83,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงขอนแก่นที่+1
+42,แขวงทางหลวงขอนแก่นที่ 2,ภาคอีสาน,ขอนแก่น,16.54,102.09,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงขอนแก่นที่+2
+43,แขวงทางหลวงขอนแก่นที่ 3 (บ้านไผ่),ภาคอีสาน,ขอนแก่น,16.05,102.73,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงขอนแก่นที่+3
+44,แขวงทางหลวงอุดรธานีที่ 1,ภาคอีสาน,อุดรธานี,17.41,102.79,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอุดรธานีที่+1
+45,แขวงทางหลวงอุดรธานีที่ 2,ภาคอีสาน,อุดรธานี,17.37,103.05,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอุดรธานีที่+2
+46,แขวงทางหลวงชัยภูมิ,ภาคอีสาน,ชัยภูมิ,15.8,102.03,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงชัยภูมิ
+47,สำนักงานทางหลวงที่ 8 (มหาสารคาม),ภาคอีสาน,มหาสารคาม,16.18,103.3,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+8+มหาสารคาม
+48,แขวงทางหลวงมหาสารคาม,ภาคอีสาน,มหาสารคาม,16.18,103.3,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงมหาสารคาม
+49,แขวงทางหลวงยโสธร,ภาคอีสาน,ยโสธร,15.79,104.14,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงยโสธร
+50,แขวงทางหลวงกาฬสินธุ์,ภาคอีสาน,กาฬสินธุ์,16.43,103.5,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงกาฬสินธุ์
+51,แขวงทางหลวงร้อยเอ็ด,ภาคอีสาน,ร้อยเอ็ด,16.05,103.65,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงร้อยเอ็ด
+52,สำนักงานทางหลวงที่ 9 (อุบลราชธานี),ภาคอีสาน,อุบลราชธานี,15.22,104.85,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+9+อุบลราชธานี
+53,แขวงทางหลวงอุบลราชธานีที่ 1,ภาคอีสาน,อุบลราชธานี,15.23,104.85,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอุบลราชธานีที่+1
+54,แขวงทางหลวงอุบลราชธานีที่ 2,ภาคอีสาน,อุบลราชธานี,15.24,104.84,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอุบลราชธานีที่+2
+55,แขวงทางหลวงศรีสะเกษที่ 1,ภาคอีสาน,ศรีสะเกษ,15.11,104.32,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงศรีสะเกษที่+1
+56,แขวงทางหลวงศรีสะเกษที่ 2,ภาคอีสาน,ศรีสะเกษ,15.12,104.33,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงศรีสะเกษที่+2
+57,แขวงทางหลวงอำนาจเจริญ,ภาคอีสาน,อำนาจเจริญ,15.86,104.62,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอำนาจเจริญ
+58,แขวงทางหลวงสุรินทร์,ภาคอีสาน,สุรินทร์,14.88,103.49,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสุรินทร์
+59,สำนักงานทางหลวงที่ 10 (นครราชสีมา),ภาคอีสาน,นครราชสีมา,14.97,102.1,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+10+นครราชสีมา
+60,แขวงทางหลวงนครราชสีมาที่ 1,ภาคอีสาน,นครราชสีมา,14.97,102.1,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครราชสีมาที่+1
+61,แขวงทางหลวงนครราชสีมาที่ 2,ภาคอีสาน,นครราชสีมา,14.98,102.11,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครราชสีมาที่+2
+62,แขวงทางหลวงนครราชสีมาที่ 3,ภาคอีสาน,นครราชสีมา,14.96,102.12,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครราชสีมาที่+3
+63,แขวงทางหลวงบุรีรัมย์,ภาคอีสาน,บุรีรัมย์,14.99,103.1,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงบุรีรัมย์
+64,แขวงทางหลวงปราจีนบุรี,ภาคตะวันออก,ปราจีนบุรี,14.05,101.37,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงปราจีนบุรี
+65,แขวงทางหลวงสระแก้ว (วัฒนานคร),ภาคตะวันออก,สระแก้ว,13.75,102.32,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสระแก้ว
+66,สำนักงานทางหลวงที่ 11 (ลพบุรี),ภาคกลาง,ลพบุรี,14.79,100.65,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+11+ลพบุรี
+67,แขวงทางหลวงลพบุรีที่ 1,ภาคกลาง,ลพบุรี,14.79,100.65,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงลพบุรีที่+1
+68,แขวงทางหลวงลพบุรีที่ 2 (ลำนารายณ์),ภาคกลาง,ลพบุรี,15.12,101.14,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงลพบุรีที่+2
+69,แขวงทางหลวงนครสวรรค์ที่ 1,ภาคกลาง,นครสวรรค์,15.69,100.11,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครสวรรค์ที่+1
+70,แขวงทางหลวงนครสวรรค์ที่ 2 (ตากฟ้า),ภาคกลาง,นครสวรรค์,15.34,100.49,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครสวรรค์ที่+2
+71,แขวงทางหลวงสระบุรี,ภาคกลาง,สระบุรี,14.53,100.91,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสระบุรี
+72,แขวงทางหลวงสิงห์บุรี,ภาคกลาง,สิงห์บุรี,14.89,100.4,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสิงห์บุรี
+73,สำนักงานทางหลวงที่ 12 (สุพรรณบุรี),ภาคกลาง,สุพรรณบุรี,14.47,100.12,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+12+สุพรรณบุรี
+74,แขวงทางหลวงสุพรรณบุรีที่ 1,ภาคกลาง,สุพรรณบุรี,14.47,100.12,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสุพรรณบุรีที่+1
+75,แขวงทางหลวงสุพรรณบุรีที่ 2 (อู่ทอง),ภาคกลาง,สุพรรณบุรี,14.37,99.89,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสุพรรณบุรีที่+2
+76,แขวงทางหลวงกาญจนบุรี,ภาคตะวันตก,กาญจนบุรี,14.02,99.53,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงกาญจนบุรี
+77,แขวงทางหลวงชัยนาท,ภาคกลาง,ชัยนาท,15.18,100.12,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงชัยนาท
+78,แขวงทางหลวงอุทัยธานี,ภาคกลาง,อุทัยธานี,15.38,100.02,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอุทัยธานี
+79,แขวงทางหลวงอ่างทอง,ภาคกลาง,อ่างทอง,14.59,100.45,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอ่างทอง
+80,สำนักงานทางหลวงที่ 13 (กรุงเทพฯ),ภาคกลาง,กรุงเทพมหานคร,13.913,100.596,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+13+กรุงเทพ
+81,แขวงทางหลวงกรุงเทพ,ภาคกลาง,กรุงเทพมหานคร,13.913,100.596,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงกรุงเทพ
+82,แขวงทางหลวงสมุทรสาคร,ภาคกลาง,สมุทรสาคร,13.54,100.27,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสมุทรสาคร
+83,แขวงทางหลวงอยุธยา,ภาคกลาง,อยุธยา,14.35,100.57,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงอยุธยา
+84,แขวงทางหลวงปทุมธานี,ภาคกลาง,ปทุมธานี,14.02,100.52,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงปทุมธานี
+85,แขวงทางหลวงสมุทรปราการ,ภาคกลาง,สมุทรปราการ,13.59,100.59,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสมุทรปราการ
+86,แขวงทางหลวงนนทบุรี,ภาคกลาง,นนทบุรี,13.86,100.51,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนนทบุรี
+87,แขวงทางหลวงธนบุรี,ภาคกลาง,กรุงเทพมหานคร,13.78,100.47,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงธนบุรี
+88,แขวงทางหลวงนครนายก,ภาคกลาง,นครนายก,14.2,101.21,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครนายก
+89,สำนักงานทางหลวงที่ 14 (ชลบุรี),ภาคตะวันออก,ชลบุรี,13.36,100.98,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+14+ชลบุรี
+90,แขวงทางหลวงชลบุรีที่ 1,ภาคตะวันออก,ชลบุรี,13.36,100.98,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงชลบุรีที่+1
+91,แขวงทางหลวงชลบุรีที่ 2,ภาคตะวันออก,ชลบุรี,13.37,100.99,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงชลบุรีที่+2
+92,แขวงทางหลวงฉะเชิงเทรา,ภาคตะวันออก,ฉะเชิงเทรา,13.69,101.07,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงฉะเชิงเทรา
+93,แขวงทางหลวงจันทบุรี,ภาคตะวันออก,จันทบุรี,12.61,102.1,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงจันทบุรี
+94,แขวงทางหลวงตราด,ภาคตะวันออก,ตราด,12.24,102.51,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงตราด
+95,แขวงทางหลวงระยอง,ภาคตะวันออก,ระยอง,12.68,101.28,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงระยอง
+96,สำนักงานทางหลวงที่ 15 (ประจวบคีรีขันธ์),ภาคตะวันตก,ประจวบคีรีขันธ์,11.81,99.79,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+15+ประจวบคีรีขันธ์
+97,แขวงทางหลวงประจวบคีรีขันธ์,ภาคตะวันตก,ประจวบคีรีขันธ์,11.81,99.79,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงประจวบคีรีขันธ์
+98,แขวงทางหลวงนครปฐม,ภาคกลาง,นครปฐม,13.82,100.03,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครปฐม
+99,แขวงทางหลวงชุมพร,ภาคใต้,ชุมพร,10.49,99.17,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงชุมพร
+100,แขวงทางหลวงราชบุรี,ภาคตะวันตก,ราชบุรี,13.53,99.81,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงราชบุรี
+101,แขวงทางหลวงสมุทรสงคราม,ภาคกลาง,สมุทรสงคราม,13.41,100,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสมุทรสงคราม
+102,แขวงทางหลวงเพชรบุรี,ภาคตะวันตก,เพชรบุรี,13.11,99.94,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงเพชรบุรี
+103,สำนักงานทางหลวงที่ 16 (นครศรีธรรมราช),ภาคใต้,นครศรีธรรมราช,8.43,99.96,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+16+นครศรีธรรมราช
+104,แขวงทางหลวงนครศรีธรรมราชที่ 1,ภาคใต้,นครศรีธรรมราช,8.43,99.96,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครศรีธรรมราชที่+1
+105,แขวงทางหลวงนครศรีธรรมราชที่ 2 (ทุ่งสง),ภาคใต้,นครศรีธรรมราช,8.16,99.68,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนครศรีธรรมราชที่+2
+106,แขวงทางหลวงสุราษฏร์ธานีที่ 1,ภาคใต้,สุราษฏร์ธานี,9.13,99.33,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสุราษฏร์ธานีที่+1
+107,แขวงทางหลวงสุราษฏร์ธานีที่ 2 (กาญจนดิษฐ์),ภาคใต้,สุราษฏร์ธานี,9.16,99.47,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสุราษฏร์ธานีที่+2
+108,แขวงทางหลวงสุราษฏร์ธานีที่ 3 (เวียงสระ),ภาคใต้,สุราษฏร์ธานี,8.63,99.35,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสุราษฏร์ธานีที่+3
+109,แขวงทางหลวงตรัง,ภาคใต้,ตรัง,7.55,99.61,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงตรัง
+110,สำนักงานทางหลวงที่ 17 (กระบี่),ภาคใต้,กระบี่,8.05,98.91,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+17+กระบี่
+111,แขวงทางหลวงกระบี่,ภาคใต้,กระบี่,8.06,98.91,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงกระบี่
+112,แขวงทางหลวงภูเก็ต,ภาคใต้,ภูเก็ต,7.8804,98.3923,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงภูเก็ต
+113,แขวงทางหลวงระนอง,ภาคใต้,ระนอง,9.97,98.63,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงระยอง
+114,แขวงทางหลวงพังงา,ภาคใต้,พังงา,8.44,98.52,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงพังงา
+115,สำนักงานทางหลวงที่ 18 (สงขลา),ภาคใต้,สงขลา,7.17,100.61,https://www.google.com/maps/search/?api=1&query=สำนักงานทางหลวงที่+18+สงขลา
+116,แขวงทางหลวงสงขลาที่ 1,ภาคใต้,สงขลา,7.18,100.61,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสงขลาที่+1
+117,แขวงทางหลวงสงขลาที่ 2 (นาหม่อม),ภาคใต้,สงขลา,6.97,100.55,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสงขลาที่+2
+118,แขวงทางหลวงพัทลุง,ภาคใต้,พัทลุง,7.61,100.07,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงพัทลุง
+119,แขวงทางหลวงยะลา,ภาคใต้,ยะลา,6.54,101.28,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงยะลา
+120,แขวงทางหลวงปัตตานี,ภาคใต้,ปัตตานี,6.86,101.25,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงปัตตานี
+121,แขวงทางหลวงนราธิวาส,ภาคใต้,นราธิวาส,6.42,101.82,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงนราธิวาส
+122,แขวงทางหลวงสตูล,ภาคใต้,สตูล,6.61,100.06,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงสตูล
+123,ศูนย์สร้างทางลำปาง,ภาคเหนือ,ลำปาง,18.28,99.49,https://www.google.com/maps/search/?api=1&query=ศูนย์สร้างทางลำปาง
+124,ศูนย์สร้างทางหล่มสัก,ภาคเหนือ,เพชรบูรณ์,16.78,101.21,https://www.google.com/maps/search/?api=1&query=ศูนย์สร้างทางหล่มสัก
+125,ศูนย์สร้างทางขอนแก่น,ภาคอีสาน,ขอนแก่น,16.43,102.83,https://www.google.com/maps/search/?api=1&query=ศูนย์สร้างทางขอนแก่น
+126,ศูนย์สร้างทางกาญจนบุรี,ภาคกลาง,กาญจนบุรี,14.02,99.53,https://www.google.com/maps/search/?api=1&query=ศูนย์สร้างทางกาญจนบุรี
+127,ศูนย์สร้างทางสงขลา,ภาคใต้,สงขลา,7.17,100.61,https://www.google.com/maps/search/?api=1&query=ศูนย์สร้างทางสงขลา
+128,ศูนย์สร้างและบูรณะสะพานที่ 1 (พิจิตร),ภาคเหนือ,พิจิตร,16.44,100.35,https://www.google.com/maps/search/?api=1&query=ศูนย์สร้างและบูรณะสะพานที่+1
+129,ศูนย์สร้างและบูรณะสะพานที่ 2 (ขอนแก่น),ภาคอีสาน,ขอนแก่น,16.43,102.83,https://www.google.com/maps/search/?api=1&query=ศูนย์สร้างและบูรณะสะพานที่+2
+130,ศูนย์สร้างและบูรณะสะพานที่ 3 (ปทุมธานี),ภาคกลาง,ปทุมธานี,14.02,100.52,https://www.google.com/maps/search/?api=1&query=ศูนย์สร้างและบูรณะสะพานที่+3
+131,ศูนย์สร้างและบูรณะสะพานที่ 4 (นครศรีธรรมราช),ภาคใต้,นครศรีธรรมราช,8.43,99.96,https://www.google.com/maps/search/?api=1&query=ศูนย์สร้างและบูรณะสะพานที่+4
+132,ศูนย์พัฒนาทรัพยากรบุคคลงานทาง,ภาคตะวันออก,ชลบุรี,13.36,100.98,https://www.google.com/maps/search/?api=1&query=ศูนย์พัฒนาทรัพยากรบุคคลงานทาง
+133,สำนักเครื่องกลและสื่อสาร,ภาคกลาง,นนทบุรี,13.86,100.51,https://www.google.com/maps/search/?api=1&query=สำนักเครื่องกลและสื่อสาร
+134,ศูนย์ทดสอบสมรรถนะและพัฒนาทักษะการใช้เครื่องจักรกล,ภาคกลาง,กรุงเทพมหานคร,13.913,100.596,https://www.google.com/maps/search/?api=1&query=ศูนย์ทดสอบสมรรถนะและพัฒนาทักษะการใช้เครื่องจักรกล
+135,ส่วนเครื่องจักรกล (สำนักงานทางหลวงที่ 14),ภาคตะวันออก,ชลบุรี,13.36,100.98,https://www.google.com/maps/search/?api=1&query=ส่วนเครื่องจักรกล+สทล.14
+136,ส่วนเครื่องจักรกล (สำนักงานทางหลวงที่ 15),ภาคใต้,ประจวบคีรีขันธ์,11.81,99.79,https://www.google.com/maps/search/?api=1&query=ส่วนเครื่องจักรกล+สทล.15
+137,แขวงทางหลวงพิเศษระหว่างเมือง,ภาคกลาง,กรุงเทพมหานคร,13.72,100.76,https://www.google.com/maps/search/?api=1&query=แขวงทางหลวงพิเศษระหว่างเมือง
+138,ศูนย์พัฒนาเทคโนโลยีงานทาง,ภาคกลาง,กรุงเทพมหานคร,13.65,100.42,https://www.google.com/maps/search/?api=1&query=ศูนย์พัฒนาเทคโนโลยีงานทาง]</script>
+    <!-- ===================================================================== -->
+
+
+    <!-- สคริปต์การทำงานของระบบ -->
+    <script>
+        // Map Initialization
+        let map;
+        let markersGroup;
+        let satelliteLayer;
+        let streetLayer;
+        let currentSites = [];
+
+        function initMap() {
+            // ตั้งจุดศูนย์กลางที่ประเทศไทย
+            map = L.map('map').setView([13.736717, 100.523186], 5);
+
+            // Layer: ภาพถ่ายดาวเทียม (Satellite)
+            satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri',
+                maxZoom: 18
+            }).addTo(map);
+
+            // Layer: แผนที่ถนน (Street Map)
+            streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            });
+
+            markersGroup = L.layerGroup().addTo(map);
+
+            // ระบบสลับแผนที่
+            document.getElementById('btn-satellite').addEventListener('click', function() {
+                map.removeLayer(streetLayer);
+                map.addLayer(satelliteLayer);
+                this.classList.replace('text-gray-600', 'text-blue-700');
+                this.classList.replace('hover:bg-gray-50', 'hover:bg-blue-100');
+                this.classList.add('bg-blue-50');
+                this.querySelector('.fa-check').classList.replace('text-white', 'text-blue-600');
+                
+                const btnStreet = document.getElementById('btn-street');
+                btnStreet.classList.replace('text-blue-700', 'text-gray-600');
+                btnStreet.classList.replace('hover:bg-blue-100', 'hover:bg-gray-50');
+                btnStreet.classList.remove('bg-blue-50');
+                btnStreet.querySelector('.fa-check').classList.replace('text-blue-600', 'text-white');
+            });
+
+            document.getElementById('btn-street').addEventListener('click', function() {
+                map.removeLayer(satelliteLayer);
+                map.addLayer(streetLayer);
+                this.classList.replace('text-gray-600', 'text-blue-700');
+                this.classList.replace('hover:bg-gray-50', 'hover:bg-blue-100');
+                this.classList.add('bg-blue-50');
+                this.querySelector('.fa-check').classList.replace('text-white', 'text-blue-600');
+                
+                const btnSat = document.getElementById('btn-satellite');
+                btnSat.classList.replace('text-blue-700', 'text-gray-600');
+                btnSat.classList.replace('hover:bg-blue-100', 'hover:bg-gray-50');
+                btnSat.classList.remove('bg-blue-50');
+                btnSat.querySelector('.fa-check').classList.replace('text-blue-600', 'text-white');
+            });
+        }
+
+        // Custom Marker Icon
+        const dohIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div style="background-color: #ef4444; border: 3px solid white; width: 24px; height: 24px; border-radius: 50%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center;"><i class="fa-solid fa-wifi text-white" style="font-size: 10px;"></i></div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+            popupAnchor: [0, -12]
+        });
+
+        function loadDataToMap(rawData) {
+            markersGroup.clearLayers();
+            
+            // กรองข้อมูลเฉพาะแถวที่มีพิกัดถูกต้อง ป้องกันปัญหาไฟล์ CSV มีบรรทัดว่าง
+            const data = rawData.filter(row => row.lat && row.lng && !isNaN(parseFloat(row.lat)) && !isNaN(parseFloat(row.lng)));
+            
+            const listContainer = document.getElementById('site-list');
+            listContainer.innerHTML = ''; // เคลียร์ข้อความโหลด
+
+            // ถ้าไม่มีข้อมูลเลย ให้แสดงข้อความแจ้งเตือน
+            if (data.length === 0) {
+                listContainer.innerHTML = '<div class="text-center text-red-500 py-8 text-sm"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><br>ไม่พบข้อมูลพิกัด หรือรูปแบบไฟล์ไม่ถูกต้อง</div>';
+                document.getElementById('kpi-total').innerText = '0';
+                return;
+            }
+            
+            // เรียงลำดับข้อมูลตาม ID อัตโนมัติ
+            data.sort((a, b) => {
+                const idA = parseInt(a.id) || 0;
+                const idB = parseInt(b.id) || 0;
+                if (idA !== idB) return idA - idB;
+                return (a.site_name || '').localeCompare(b.site_name || '', 'th');
+            });
+            
+            currentSites = data;
+            
+            let bounds = [];
+            let regions = new Set();
+
+            data.forEach((row, index) => {
+                const lat = parseFloat(row.lat);
+                const lng = parseFloat(row.lng);
+                regions.add(row.region);
+                bounds.push([lat, lng]);
+
+                // ป้องกันปัญหาข้อมูลชื่อหน่วยงานมีเครื่องหมายคำพูด (Quote)
+                const safeSiteName = (row.site_name || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                const safeProvince = (row.province || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                const safeRegion = (row.region || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+
+                // สร้างเนื้อหา Popup บนแผนที่
+                const popupContent = `
+                    <div class="p-2 min-w-[280px]">
+                        <div class="text-xs text-blue-600 font-bold mb-1">${row.region || '-'} > ${row.province || '-'}</div>
+                        <h3 class="font-bold text-gray-800 text-sm mb-2">${row.site_name || '-'}</h3>
+                        <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded mb-3 flex items-center">
+                            <i class="fa-solid fa-location-crosshairs mr-1"></i> เป้าหมาย: ระบุจุดติดตั้งเพิ่ม (ขั้นต่ำ 5 จุด)
+                        </div>
+                        <div class="flex flex-col gap-2 mb-3">
+                            <button onclick="generateGuideline('${safeSiteName}', '${safeProvince}', '${safeRegion}')" class="w-full bg-amber-50 border border-amber-100 hover:bg-amber-100 text-amber-700 text-xs py-1.5 px-2 rounded transition flex items-center justify-center font-medium shadow-sm">
+                                <i class="fa-solid fa-lightbulb mr-1.5"></i> ✨ สร้าง Guideline แนบฟอร์ม
+                            </button>
+                        </div>
+                        <div class="flex gap-2">
+                            <a href="${row.Google_Maps_Link}" target="_blank" class="flex-1 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs py-1.5 px-2 rounded border border-gray-300 transition">
+                                <i class="fa-solid fa-map"></i> ดูใน Maps
+                            </a>
+                            <button onclick="openSurveyForm('${row.id || ''}', '${safeSiteName}')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5 px-2 rounded shadow transition">
+                                <i class="fa-solid fa-paper-plane"></i> เปิดฟอร์มสำรวจ
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                const marker = L.marker([lat, lng], { icon: dohIcon }).bindPopup(popupContent, {className: 'custom-popup'});
+                markersGroup.addLayer(marker);
+
+                // เพิ่มรายชื่อลงใน Sidebar ด้านขวา
+                const listItem = document.createElement('div');
+                listItem.className = 'site-list-item bg-white border border-gray-100 hover:border-blue-300 p-3 rounded-lg cursor-pointer transition shadow-sm hover:shadow';
+                listItem.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex-grow">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="bg-gray-800 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">ID: ${row.id || '-'}</span>
+                                <h4 class="text-sm font-bold text-gray-800 leading-tight">${row.site_name || '-'}</h4>
+                            </div>
+                            <p class="text-xs text-gray-500"><i class="fa-solid fa-location-dot text-gray-400"></i> ${row.province || '-'} | ${row.region || '-'}</p>
+                        </div>
+                        <button class="text-blue-500 hover:text-blue-700 p-1" title="ดูบนแผนที่">
+                            <i class="fa-solid fa-crosshairs"></i>
+                        </button>
+                    </div>
+                `;
+                
+                listItem.addEventListener('click', () => {
+                    map.flyTo([lat, lng], 16, { duration: 1.5 });
+                    setTimeout(() => marker.openPopup(), 1500);
+                });
+                
+                listContainer.appendChild(listItem);
+            });
+
+            // ปรับมุมมองแผนที่ให้ครอบคลุมจุดทั้งหมด
+            if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
+
+            // อัปเดตตัวเลข KPI ด้านบน
+            document.getElementById('kpi-total').innerText = data.length.toLocaleString() || '0';
+            document.getElementById('kpi-regions').innerText = regions.size.toLocaleString() || '0';
+            document.getElementById('list-count').innerText = `${data.length} รายการ`;
+        }
+
+        // ฟังก์ชันอ่านข้อมูล CSV ที่ถูกฝังไว้
+        function processCSVText(csvText) {
+            Papa.parse(csvText, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) { 
+                    loadDataToMap(results.data); 
+                },
+                error: function(error) { 
+                    alert("เกิดข้อผิดพลาดในการโหลดข้อมูล: " + error.message); 
+                }
+            });
+        }
+
+        // ระบบค้นหารายชื่อใน Sidebar
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const listItems = document.querySelectorAll('.site-list-item');
+            listItems.forEach((item) => {
+                item.style.display = item.innerText.toLowerCase().includes(searchTerm) ? 'block' : 'none';
+            });
+        });
+
+        // ==========================================
+        // 📋 Survey Form Integration Logic 
+        // ==========================================
+        function openSurveyForm(siteId, siteName) {
+            // Form ID ของ Google Forms
+            const formId = "1FAIpQLSds7pr4CmhwTHgOcyjnLyVMqB7_5AHS-YPMuzEKgvQb8d5xCQ"; 
+            const baseUrl = `https://docs.google.com/forms/d/e/${formId}/viewform`;
+            
+            // รหัส entry ของคำถาม Dropdown ชื่อหน่วยงาน
+            const entryNameParam = "entry.1291783555"; 
+            
+            // สร้างข้อความให้ตรงกับรูปแบบใน Dropdown ของฟอร์ม (รูปแบบ: รหัส ชื่อหน่วยงาน)
+            const dropdownValue = `${siteId} ${siteName}`;
+
+            // สร้าง URL แบบกรอกล่วงหน้า
+            const prefilledUrl = `${baseUrl}?usp=pp_url&${entryNameParam}=${encodeURIComponent(dropdownValue)}`;
+            
+            // เปิดฟอร์มในหน้าต่างใหม่
+            window.open(prefilledUrl, '_blank');
+        }
+
+        // ==========================================
+        // ✨ Gemini API & AI Assistant Logic 
+        // ==========================================
+        const apiKey = ""; // API Key ถูกเตรียมให้พร้อมใช้งานอัตโนมัติ
+        let lastAiResponse = "";
+
+        async function fetchGeminiWithRetry(prompt, retries = 5) {
+            const delays = [1000, 2000, 4000, 8000, 16000];
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { 
+                    parts: [{ text: "คุณคือผู้ช่วย Project Manager มืออาชีพ มีหน้าที่ให้คำแนะนำเชิงกลยุทธ์เกี่ยวกับการวางแผนติดตั้งโครงข่าย Wi-Fi ให้กับหน่วยงานราชการ ตอบด้วยภาษาธุรกิจที่ลูกค้าเข้าใจง่าย กระชับ ตรงประเด็น และดูมีความน่าเชื่อถือ ใช้ Markdown ในการจัดรูปแบบข้อความเสมอ" }] 
+                }
+            };
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || "ไม่มีข้อมูลตอบกลับจาก AI";
+                } catch (error) {
+                    if (i === retries - 1) {
+                        console.error("Gemini API Error:", error);
+                        return "เกิดข้อผิดพลาดในการเชื่อมต่อกับระบบ AI กรุณาลองใหม่อีกครั้ง";
+                    }
+                    await new Promise(r => setTimeout(r, delays[i]));
+                }
+            }
+        }
+
+        function showAIModal(title) {
+            document.getElementById('aiModalTitle').innerText = title;
+            document.getElementById('aiModalContent').innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12 text-indigo-500">
+                    <i class="fa-solid fa-circle-notch fa-spin text-5xl mb-4"></i>
+                    <p class="font-medium animate-pulse mt-4">✨ กำลังให้ AI ประมวลผลข้อมูล...</p>
+                </div>
+            `;
+            document.getElementById('aiModal').classList.remove('hidden');
+        }
+
+        function closeAIModal() {
+            document.getElementById('aiModal').classList.add('hidden');
+        }
+
+        function formatMarkdown(text) {
+            let html = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900">$1</strong>');
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+
+        function displayAIResult(text) {
+            lastAiResponse = text;
+            document.getElementById('aiModalContent').innerHTML = `
+                <div class="prose prose-sm prose-indigo max-w-none text-gray-700">
+                    ${formatMarkdown(text)}
+                </div>
+            `;
+        }
+
+        function copyAIContent(event) {
+            if(!lastAiResponse) return;
+            const textarea = document.createElement('textarea');
+            textarea.value = lastAiResponse;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            
+            const btn = event.currentTarget;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> คัดลอกแล้ว!';
+            btn.classList.add('bg-green-100', 'text-green-700');
+            btn.classList.remove('bg-indigo-100', 'text-indigo-700');
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('bg-green-100', 'text-green-700');
+                btn.classList.add('bg-indigo-100', 'text-indigo-700');
+            }, 2000);
+        }
+
+        // --- AI Use Cases ---
+        async function generateGlobalSummary() {
+            showAIModal('✨ AI สรุปและวิเคราะห์จุดติดตั้งเพิ่มเติม');
+            const total = currentSites.length;
+            
+            const prompt = `สรุปและวิเคราะห์แนวทางการกำหนดจุดสำรวจติดตั้ง Wi-Fi เพิ่มเติม (อย่างน้อย 5 จุด/หน่วยงาน) สำหรับโครงการแผนแม่บทปีงบประมาณ 2570 ของกรมทางหลวง (ข้อมูลปัจจุบันมี ${total} หน่วยงาน)
+            
+            **เงื่อนไขบังคับ (Constraint):** "ห้าม" นำเสนอการติดตั้งในสถานที่ต่อไปนี้โดยเด็ดขาด: 1. อาคารสำนักงานหลัก 2. อาคารปรับซ่อม 3. บ้านพักเจ้าหน้าที่ 4. ป้อมยาม
+            
+            คำสั่ง: 
+            1. กรุณาเขียนสรุปรายงาน 3-4 bullet points นำเสนอคณะกรรมการ ว่านอกเหนือจากพื้นที่ที่ถูกยกเว้นข้างต้นแล้ว ควรพิจารณาติดตั้ง Wi-Fi ที่อาคารหรือบริเวณใดบ้าง เพื่อให้ตอบโจทย์การทำงาน (เช่น อาคารคลังพัสดุ, โรงจอดเครื่องจักรกลหนัก, ศูนย์บริการประชาชน, ห้องทดสอบวัสดุ เป็นต้น) พร้อมระบุประโยชน์ที่จะได้รับสั้นๆ
+            2. ตอนท้ายให้สรุป Next Step สั้นๆ เรื่องการให้แต่ละพื้นที่กรอกแบบฟอร์มชี้เป้าพิกัด 5 จุด
+            3. **ข้อควรระวัง (สำคัญมาก):** ห้ามเขียนคำเกริ่นนำ ห้ามพิมพ์ประโยคเช่น "ในฐานะ Project Manager..." หรือ "ขอสรุป..." ให้เริ่มที่เนื้อหารายงาน (Bullet points) ทันที เพื่อนำไปใส่ในสไลด์ผู้บริหาร`;
+            
+            const result = await fetchGeminiWithRetry(prompt);
+            displayAIResult(result);
+        }
+
+        async function generateGuideline(siteName, province, region) {
+            map.closePopup();
+            showAIModal(`✨ สร้าง Guideline แนบฟอร์ม: ${siteName}`);
+            
+            const prompt = `ในฐานะ Project Manager โปรดเขียน "คำแนะนำ/Guideline" สั้นๆ เพื่อเตรียมแนบไปกับลิงก์แบบฟอร์มสำรวจสำหรับหน่วยงาน "${siteName}" จังหวัด${province} ภาค${region}
+
+วัตถุประสงค์: เพื่อเป็นตัวอย่างให้เจ้าหน้าที่ในพื้นที่เข้าใจตรงกันว่า ส่วนกลางต้องการให้พิจารณากำหนดจุดติดตั้ง Wi-Fi เพิ่มเติม (อย่างน้อย 5 จุด) ในลักษณะใด เพื่อสนับสนุนการปฏิบัติงาน
+
+เงื่อนไขบังคับ (Constraint): "ห้าม" ระบุถึงสถานที่ต่อไปนี้โดยเด็ดขาด: 1. อาคารสำนักงานหลัก 2. อาคารปรับซ่อม 3. บ้านพักเจ้าหน้าที่ 4. ป้อมยาม
+
+คำสั่ง: กรุณาเขียนด้วยภาษาที่เป็นมิตรและให้เกียรติคนทำงานหน้างาน พร้อมยกตัวอย่างพื้นที่เป้าหมายเชิงปฏิบัติการ 3-5 ประเภท (เช่น อาคารคลังพัสดุ, โรงจอดเครื่องจักรกลหนัก, ศูนย์บริการประชาชน, ห้องทดสอบวัสดุ ฯลฯ) พร้อมอธิบายเหตุผลสั้นๆ ว่าพื้นที่เหล่านี้จะได้ประโยชน์อะไรจากการมีเครือข่าย Wi-Fi เพื่อให้ใช้เป็นแนวทางในการกรอกแบบฟอร์มได้อย่างถูกต้องตามเป้าหมายของงบประมาณปี 2570`;
+            
+            const result = await fetchGeminiWithRetry(prompt);
+            displayAIResult(result);
+        }
+
+        // ==========================================
+        // 🚀 เริ่มการทำงานเมื่อหน้าเว็บโหลดเสร็จ
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            
+            // ดึงข้อมูลจากแท็ก <script id="csv-data"> 
+            const rawCsvText = document.getElementById('csv-data').textContent.trim();
+            
+            // นำข้อมูลไปประมวลผลทันที
+            processCSVText(rawCsvText); 
+        });
+    </script>
+</body>
+</html>
