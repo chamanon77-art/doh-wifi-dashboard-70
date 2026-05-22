@@ -1,443 +1,426 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from 'recharts';
-import { Lightbulb, CheckCircle2, Clock, Percent, MapPin, AlertCircle, FileSpreadsheet, RefreshCw, Link2 } from 'lucide-react';
-
-const Dashboard = () => {
-  // เปลี่ยนข้อมูลคงที่เป็น State เพื่อให้อัปเดตได้เมื่อมีการอัปโหลดไฟล์
-  const [projectInfo, setProjectInfo] = useState({
-    title: "โครงการติดตั้งโคมไฟถนนพลังงานแสงอาทิตย์",
-    subtitle: "พร้อมเสาไฟเลื่อนปรับระดับและฐานรากเข็มเหล็ก",
-    location: "ในเขตพื้นที่ตำบลบางบัวทอง หมู่ที่ 3,4,6,7,8,10,12,14 ตำบลบางบัวทอง อำเภอบางบัวทอง จังหวัดนนทบุรี",
-    total: 224,
-    installed: 14,
-    remaining: 210,
-    progress: 6.25
-  });
-
-  const [locationData, setLocationData] = useState([
-    { id: 1, name: 'ซอยสนเพชร', shortName: 'ซ.สนเพชร', total: 14, installed: 0, remaining: 14 },
-    { id: 2, name: 'ซอยหมอฟา', shortName: 'ซ.หมอฟา', total: 19, installed: 0, remaining: 19 },
-    { id: 3, name: 'ถนนเลียบคลองพระพิมล', shortName: 'ถ.คลองพระพิมล', total: 41, installed: 14, remaining: 27 },
-    { id: 4, name: 'ถนนเลียบคลองลากค้อน', shortName: 'ถ.คลองลากค้อน', total: 43, installed: 0, remaining: 43 },
-    { id: 5, name: 'ถนนเส้นบ้านผู้ใหญ่ชูถึงบ้านบังตุ๊', shortName: 'ถ.บ้านผู้ใหญ่ชูฯ', total: 35, installed: 0, remaining: 35 },
-    { id: 6, name: 'ถนนเลียบคลองบางตาโอก', shortName: 'ถ.คลองบางตาโอก', total: 30, installed: 0, remaining: 30 },
-    { id: 7, name: 'ซอยเลียบคลองตากล้วย', shortName: 'ซ.คลองตากล้วย', total: 11, installed: 0, remaining: 11 },
-    { id: 8, name: 'ซอยวัดลาดปลาดุก', shortName: 'ซ.วัดลาดปลาดุก', total: 8, installed: 0, remaining: 8 },
-    { id: 9, name: 'ซอยวัดพงศ์ศรัทธาธรรม', shortName: 'ซ.วัดพงศ์ฯ', total: 10, installed: 0, remaining: 10 },
-    { id: 10, name: 'ซอยเลียบคลองใหม่', shortName: 'ซ.เลียบคลองใหม่', total: 9, installed: 0, remaining: 9 },
-    { id: 11, name: 'ซอยคลองโต๊ะเจริญ', shortName: 'ซ.คลองโต๊ะเจริญ', total: 4, installed: 0, remaining: 4 },
-  ]);
-
-  // ตั้งค่า Link Google Sheets ของคุณเป็นค่าเริ่มต้น
-  const defaultSheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQjbLRt-AUTah9KormRCSDgSgIsE5Oa5HKdXuVtbIG6ZSkHae_OVIN9M8hbrhvzAw/pub?output=csv';
-  const [sheetUrl, setSheetUrl] = useState(defaultSheetUrl);
-  const [isFetching, setIsFetching] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [showSettings, setShowSettings] = useState(false);
-
-  const pieData = [
-    { name: 'ติดตั้งแล้วเสร็จ', value: projectInfo.installed, color: '#10b981' }, // Emerald 500
-    { name: 'คงเหลือ', value: projectInfo.remaining, color: '#f1f5f9' }, // Slate 100
-  ];
-
-  // ฟังก์ชันแยกการอ่านข้อมูล CSV เพื่อให้ใช้ซ้ำได้
-  const parseCSVData = (text) => {
-    const lines = text.split('\n');
-    try {
-      // 1. อ่านข้อมูลภาพรวม
-      const infoLine = lines[4].split(',');
-      const newTotal = parseInt(infoLine[1]) || 0;
-      const newInstalled = parseInt(infoLine[3]) || 0;
-      const newRemaining = parseInt(infoLine[5]) || 0;
-      const newProgress = newTotal > 0 ? ((newInstalled / newTotal) * 100).toFixed(2) : 0;
-
-      setProjectInfo(prev => ({
-        ...prev,
-        total: newTotal,
-        installed: newInstalled,
-        remaining: newRemaining,
-        progress: parseFloat(newProgress)
-      }));
-
-      // 2. อ่านข้อมูลรายพื้นที่
-      const startIdx = lines.findIndex(l => l.includes('พิกัดจุดที่'));
-      if (startIdx !== -1) {
-        const newLocations = [];
-        for (let i = startIdx + 1; i < lines.length; i++) {
-          if (!lines[i] || lines[i].trim() === '') continue;
-          
-          const cols = lines[i].split(',');
-          if (cols.length > 2 && cols[1] && !isNaN(parseInt(cols[2]))) {
-            const fullName = cols[1].replace(/^\d+\.\s*/, '');
-            
-            let shortName = fullName;
-            if (shortName.startsWith('ซอย')) shortName = shortName.replace('ซอย', 'ซ.');
-            if (shortName.startsWith('ถนนเลียบคลอง')) shortName = shortName.replace('ถนนเลียบคลอง', 'ถ.คลอง');
-            if (shortName.startsWith('ถนน')) shortName = shortName.replace('ถนน', 'ถ.');
-            if (shortName.length > 15) shortName = shortName.substring(0, 15) + '...';
-
-            newLocations.push({
-              id: i,
-              name: fullName,
-              shortName: shortName,
-              total: parseInt(cols[2] || 0),
-              installed: parseInt(cols[3] || 0),
-              remaining: parseInt(cols[4] || 0)
-            });
-          }
-        }
-        if (newLocations.length > 0) {
-          setLocationData(newLocations);
-        }
-      }
-      setLastUpdated(new Date());
-    } catch (error) {
-      console.error("เกิดข้อผิดพลาดในการอ่านข้อมูล", error);
-      alert("รูปแบบข้อมูลไม่ถูกต้อง โปรดตรวจสอบไฟล์หรือ URL (ต้องเป็นฟอร์แมต CSV ของระบบ)");
-    }
-  };
-
-  // ฟังก์ชันจัดการเมื่อผู้ใช้อัปโหลดไฟล์ CSV
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      parseCSVData(e.target.result);
-      setShowSettings(false);
-    };
-    reader.readAsText(file);
-  };
-
-  // ฟังก์ชันดึงข้อมูลจาก Google Sheets CSV URL
-  const fetchFromSheet = async (customUrl) => {
-    // ตรวจสอบว่า customUrl เป็น String (มาจาก useEffect) หรือเป็น Event (มาจากการคลิกปุ่ม)
-    const targetUrl = typeof customUrl === 'string' ? customUrl : sheetUrl;
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard โครงการติดตั้งโคมไฟถนนพลังงานแสงอาทิตย์</title>
     
-    if (!targetUrl) {
-      alert("กรุณาใส่ Link ของ Google Sheets (แบบ CSV)");
-      return;
-    }
-    setIsFetching(true);
-    try {
-      const response = await fetch(targetUrl);
-      if (!response.ok) throw new Error('Network response was not ok');
-      const text = await response.text();
-      parseCSVData(text);
-      setShowSettings(false);
-    } catch (error) {
-      console.error('Fetch error:', error);
-      alert('ไม่สามารถดึงข้อมูลได้ โปรดตรวจสอบ URL หรือตั้งค่า Publish to Web เป็น CSV ให้ถูกต้อง');
-    } finally {
-      setIsFetching(false);
-    }
-  };
+    <!-- นำเข้าฟอนต์ Prompt จาก Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  // ดึงข้อมูลอัตโนมัติทันทีที่โหลดหน้า Dashboard เสร็จ
-  useEffect(() => {
-    fetchFromSheet(defaultSheetUrl);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    <!-- นำเข้า Tailwind CSS และตั้งค่าธีม -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    },
+                    colors: {
+                        solar: {
+                            50: '#fffbeb',
+                            100: '#fef3c7',
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- นำเข้า React และ ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-is@18/umd/react-is.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- นำเข้า Recharts -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
 
-  // Component สำหรับ Card แสดงตัวเลข KPI
-  const MetricCard = ({ title, value, subtitle, icon: Icon, colorClass, bgColorClass }) => (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex items-center space-x-4 transition-all hover:shadow-md">
-      <div className={`p-4 rounded-xl ${bgColorClass} ${colorClass}`}>
-        <Icon size={28} strokeWidth={2} />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-        <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
-        {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
-      </div>
-    </div>
-  );
+    <style>
+        /* ซ่อน Scrollbar ของหน้าต่างหลัก แต่ยังให้เลื่อนได้ถ้าจอเล็กมาก */
+        body { overflow-x: hidden; }
+        /* ตกแต่ง Scrollbar สำหรับตารางให้ดูพรีเมี่ยม */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-[#f8fafc] text-slate-800">
+    
+    <div id="root"></div>
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Header Section */}
-        <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-slate-100">
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center space-x-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold mb-3">
-                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-                <span>กำลังดำเนินการ</span>
-              </div>
-              <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2">{projectInfo.title}</h1>
-              <h2 className="text-lg text-slate-600 mb-4">{projectInfo.subtitle}</h2>
-              <div className="flex items-start space-x-2 text-slate-500 text-sm">
-                <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <p className="max-w-2xl leading-relaxed">{projectInfo.location}</p>
-              </div>
-            </div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
 
-            {/* ส่วนควบคุมการเชื่อมต่อข้อมูล */}
-            <div className="flex-shrink-0 mt-4 md:mt-0 flex flex-col items-end space-y-2 relative">
-              <div className="flex space-x-2">
-                {sheetUrl && (
-                  <button 
-                    onClick={fetchFromSheet}
-                    disabled={isFetching}
-                    className="inline-flex items-center justify-center px-4 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl shadow-sm hover:bg-blue-100 transition-all text-sm font-medium disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
-                    {isFetching ? 'กำลังอัปเดต...' : 'ซิงค์ข้อมูลล่าสุด'}
-                  </button>
-                )}
-                <button 
-                  onClick={() => setShowSettings(!showSettings)}
-                  className="inline-flex items-center justify-center px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 transition-all text-sm font-medium text-slate-700 group"
-                >
-                  <Link2 className="w-4 h-4 mr-2 text-indigo-500 group-hover:text-indigo-600" />
-                  เชื่อมต่อ Google Sheets
-                </button>
-              </div>
-              
-              {showSettings && (
-                <div className="bg-white p-4 rounded-xl border border-slate-200 w-full md:w-[350px] mt-2 shadow-xl absolute top-full right-0 z-50 animate-in fade-in slide-in-from-top-2">
-                  <h4 className="text-sm font-semibold text-slate-800 mb-2">อัปเดตอัตโนมัติจาก Google Sheets</h4>
-                  <ol className="text-xs text-slate-500 mb-3 space-y-1 ml-4 list-decimal">
-                    <li>ไปที่ Google Sheets ของคุณ</li>
-                    <li>เมนู <strong>File {">"} Share {">"} Publish to web</strong></li>
-                    <li>เลือกเป็น <strong>Comma-separated values (.csv)</strong></li>
-                    <li>นำ Link ที่ได้มาวางด้านล่างแล้วกดบันทึก</li>
-                  </ol>
-                  <div className="flex space-x-2">
-                    <input 
-                      type="text" 
-                      placeholder="วาง URL ที่นี่..." 
-                      className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      value={sheetUrl}
-                      onChange={(e) => setSheetUrl(e.target.value)}
-                    />
-                    <button 
-                      onClick={fetchFromSheet}
-                      disabled={isFetching}
-                      className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      {isFetching ? 'รอสักครู่..' : 'ดึงข้อมูล'}
-                    </button>
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-slate-100 text-center">
-                    <span className="text-xs text-slate-400">หรืออัปโหลดไฟล์ด้วยตัวเอง (Manual)</span>
-                    <label className="cursor-pointer mt-2 inline-flex items-center justify-center px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm hover:bg-slate-100 transition-all text-xs font-medium text-slate-700 w-full">
-                      <FileSpreadsheet className="w-3.5 h-3.5 mr-2 text-emerald-600" />
-                      อัปโหลดไฟล์ .csv
-                      <input 
-                        type="file" 
-                        accept=".csv" 
-                        className="hidden" 
-                        onChange={handleFileUpload}
-                      />
-                    </label>
-                  </div>
+        // ---- Icons Component ----
+        const iconPaths = {
+            Sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></>,
+            Lightbulb: <><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></>,
+            CheckCircle2: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>,
+            Clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
+            Percent: <><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></>,
+            MapPin: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></>,
+            RefreshCw: <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>,
+            Link2: <><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></>
+        };
+
+        const Icon = ({ name, className = "", size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {iconPaths[name]}
+            </svg>
+        );
+
+        const Dashboard = () => {
+            const [projectInfo, setProjectInfo] = useState({
+                title: "โครงการติดตั้งโคมไฟถนนพลังงานแสงอาทิตย์",
+                subtitle: "พร้อมเสาไฟเลื่อนปรับระดับและฐานรากเข็มเหล็ก",
+                location: "ในเขตพื้นที่ตำบลบางบัวทอง จังหวัดนนทบุรี",
+                total: 224,
+                installed: 14,
+                remaining: 210,
+                progress: 6.25
+            });
+
+            const [locationData, setLocationData] = useState([
+                { id: 1, name: 'ซอยสนเพชร', shortName: 'ซ.สนเพชร', total: 14, installed: 0, remaining: 14 },
+                { id: 2, name: 'ซอยหมอฟา', shortName: 'ซ.หมอฟา', total: 19, installed: 0, remaining: 19 },
+                { id: 3, name: 'ถนนเลียบคลองพระพิมล', shortName: 'ถ.คลองพระพิมล', total: 41, installed: 14, remaining: 27 },
+                { id: 4, name: 'ถนนเลียบคลองลากค้อน', shortName: 'ถ.คลองลากค้อน', total: 43, installed: 0, remaining: 43 },
+                { id: 5, name: 'ถนนเส้นบ้านผู้ใหญ่ชูถึงบ้านบังตุ๊', shortName: 'ถ.บ้านผู้ใหญ่ชูฯ', total: 35, installed: 0, remaining: 35 },
+            ]);
+
+            const defaultSheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQjbLRt-AUTah9KormRCSDgSgIsE5Oa5HKdXuVtbIG6ZSkHae_OVIN9M8hbrhvzAw/pub?output=csv';
+            const [sheetUrl, setSheetUrl] = useState(defaultSheetUrl);
+            const [isFetching, setIsFetching] = useState(false);
+            const [lastUpdated, setLastUpdated] = useState(new Date());
+            const [showSettings, setShowSettings] = useState(false);
+
+            // สีทีมพลังงานแสงอาทิตย์ (Amber = พลังงาน/ติดตั้งแล้ว, Slate = รอติดตั้ง)
+            const pieData = [
+                { name: 'ติดตั้งแล้วเสร็จ', value: projectInfo.installed, color: '#f59e0b' }, 
+                { name: 'คงเหลือ', value: projectInfo.remaining, color: '#e2e8f0' }, 
+            ];
+
+            const parseCSVData = (text) => {
+                const lines = text.split('\n');
+                try {
+                    const infoLine = lines[4].split(',');
+                    const newTotal = parseInt(infoLine[1]) || 0;
+                    const newInstalled = parseInt(infoLine[3]) || 0;
+                    const newRemaining = parseInt(infoLine[5]) || 0;
+                    const newProgress = newTotal > 0 ? ((newInstalled / newTotal) * 100).toFixed(2) : 0;
+
+                    setProjectInfo(prev => ({
+                        ...prev,
+                        total: newTotal,
+                        installed: newInstalled,
+                        remaining: newRemaining,
+                        progress: parseFloat(newProgress)
+                    }));
+
+                    const startIdx = lines.findIndex(l => l.includes('พิกัดจุดที่'));
+                    if (startIdx !== -1) {
+                        const newLocations = [];
+                        for (let i = startIdx + 1; i < lines.length; i++) {
+                            if (!lines[i] || lines[i].trim() === '') continue;
+                            
+                            const cols = lines[i].split(',');
+                            if (cols.length > 2 && cols[1] && !isNaN(parseInt(cols[2]))) {
+                                const fullName = cols[1].replace(/^\d+\.\s*/, '');
+                                let shortName = fullName;
+                                if (shortName.startsWith('ซอย')) shortName = shortName.replace('ซอย', 'ซ.');
+                                if (shortName.startsWith('ถนนเลียบคลอง')) shortName = shortName.replace('ถนนเลียบคลอง', 'ถ.คลอง');
+                                if (shortName.startsWith('ถนน')) shortName = shortName.replace('ถนน', 'ถ.');
+                                if (shortName.length > 15) shortName = shortName.substring(0, 15) + '...';
+
+                                newLocations.push({
+                                    id: i,
+                                    name: fullName,
+                                    shortName: shortName,
+                                    total: parseInt(cols[2] || 0),
+                                    installed: parseInt(cols[3] || 0),
+                                    remaining: parseInt(cols[4] || 0)
+                                });
+                            }
+                        }
+                        if (newLocations.length > 0) setLocationData(newLocations);
+                    }
+                    setLastUpdated(new Date());
+                } catch (error) {
+                    console.error(error);
+                }
+            };
+
+            const fetchFromSheet = async (customUrl) => {
+                const targetUrl = typeof customUrl === 'string' ? customUrl : sheetUrl;
+                if (!targetUrl) return;
+                setIsFetching(true);
+                try {
+                    const response = await fetch(targetUrl);
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    const text = await response.text();
+                    parseCSVData(text);
+                    setShowSettings(false);
+                } catch (error) {
+                    console.error('Fetch error:', error);
+                } finally {
+                    setIsFetching(false);
+                }
+            };
+
+            useEffect(() => {
+                fetchFromSheet(defaultSheetUrl);
+            }, []);
+
+            // Premium Metric Card
+            const MetricCard = ({ title, value, subtitle, icon, colorClass, gradientClass }) => (
+                <div className="bg-white rounded-2xl p-5 shadow-lg shadow-slate-200/40 border border-slate-100 flex items-start space-x-4 relative overflow-hidden group">
+                    <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${gradientClass} opacity-10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110`}></div>
+                    <div className={`p-3 rounded-xl bg-gradient-to-br ${gradientClass} text-white shadow-md z-10`}>
+                        <Icon name={icon} size={24} />
+                    </div>
+                    <div className="z-10">
+                        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+                        <h3 className={`text-2xl lg:text-3xl font-bold ${colorClass}`}>{value}</h3>
+                        {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
+                    </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
+            );
 
-        {/* KPIs Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard 
-            title="จำนวนโคมไฟรวม" 
-            value={`${projectInfo.total} ต้น`} 
-            icon={Lightbulb}
-            colorClass="text-blue-600"
-            bgColorClass="bg-blue-50"
-          />
-          <MetricCard 
-            title="ติดตั้งแล้วเสร็จ" 
-            value={`${projectInfo.installed} ต้น`} 
-            icon={CheckCircle2}
-            colorClass="text-emerald-600"
-            bgColorClass="bg-emerald-50"
-          />
-          <MetricCard 
-            title="จำนวนคงเหลือ" 
-            value={`${projectInfo.remaining} ต้น`} 
-            icon={Clock}
-            colorClass="text-amber-500"
-            bgColorClass="bg-amber-50"
-          />
-          <MetricCard 
-            title="ความคืบหน้าโครงการ" 
-            value={`${projectInfo.progress}%`} 
-            icon={Percent}
-            colorClass="text-indigo-600"
-            bgColorClass="bg-indigo-50"
-            subtitle="คำนวณจากจำนวนต้นที่ติดตั้งเสร็จ"
-          />
-        </div>
+            return (
+                <div className="p-4 md:p-6 lg:h-screen lg:overflow-hidden flex flex-col">
+                    <div className="max-w-[1600px] mx-auto w-full flex-1 flex flex-col space-y-4 lg:space-y-6">
+                        
+                        {/* Header Section */}
+                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white rounded-2xl p-5 md:p-6 shadow-lg shadow-slate-200/40 border border-slate-100 flex-shrink-0">
+                            <div className="flex items-center space-x-4">
+                                <div className="hidden md:flex items-center justify-center w-14 h-14 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full shadow-lg shadow-orange-500/30 text-white">
+                                    <Icon name="Sun" size={32} />
+                                </div>
+                                <div>
+                                    <h1 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight flex items-center">
+                                        Solar Dashboard
+                                        <span className="ml-3 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full border border-amber-200 uppercase tracking-wider">
+                                            Live
+                                        </span>
+                                    </h1>
+                                    <p className="text-slate-500 text-sm md:text-base mt-1">{projectInfo.title}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-4 lg:mt-0 flex items-center space-x-3 w-full lg:w-auto">
+                                <div className="text-right hidden sm:block mr-2">
+                                    <p className="text-xs text-slate-400">ข้อมูลอัปเดตล่าสุด</p>
+                                    <p className="text-sm font-medium text-slate-700">{lastUpdated.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })} น.</p>
+                                </div>
+                                <button 
+                                    onClick={fetchFromSheet}
+                                    disabled={isFetching}
+                                    className="flex-1 lg:flex-none inline-flex items-center justify-center px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition-all text-sm font-medium disabled:opacity-70 group"
+                                >
+                                    <Icon name="RefreshCw" className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} size={18} />
+                                    {isFetching ? 'กำลังซิงค์...' : 'อัปเดตข้อมูล'}
+                                </button>
+                            </div>
+                        </div>
 
-        {/* Progress Bar Overall */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <div className="flex justify-between items-end mb-2">
-            <h3 className="font-semibold text-slate-800">ภาพรวมความคืบหน้า</h3>
-            <span className="text-2xl font-bold text-emerald-500">{projectInfo.progress}%</span>
-          </div>
-          <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden relative">
-            <div 
-              className="bg-emerald-500 h-4 rounded-full transition-all duration-1000 ease-out absolute left-0 top-0"
-              style={{ width: `${projectInfo.progress}%` }}
-            ></div>
-          </div>
-          <p className="text-xs text-slate-400 mt-3 text-right">
-            ข้อมูลอัปเดตล่าสุด: {lastUpdated.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })} น.
-          </p>
-        </div>
+                        {/* Main Grid Layout */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 flex-1 min-h-0">
+                            
+                            {/* Left Column (KPIs & Charts) */}
+                            <div className="lg:col-span-8 flex flex-col space-y-4 lg:space-y-6 min-h-0">
+                                
+                                {/* KPIs */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-shrink-0">
+                                    <MetricCard 
+                                        title="เป้าหมายโคมไฟรวม" 
+                                        value={`${projectInfo.total}`} 
+                                        subtitle="ต้นทั้งหมด"
+                                        icon="Lightbulb"
+                                        colorClass="text-slate-800"
+                                        gradientClass="from-slate-700 to-slate-900"
+                                    />
+                                    <MetricCard 
+                                        title="ติดตั้งแล้วเสร็จ" 
+                                        value={`${projectInfo.installed}`}
+                                        subtitle="พร้อมใช้งาน" 
+                                        icon="CheckCircle2"
+                                        colorClass="text-amber-600"
+                                        gradientClass="from-amber-400 to-orange-500"
+                                    />
+                                    <MetricCard 
+                                        title="จำนวนคงเหลือ" 
+                                        value={`${projectInfo.remaining}`} 
+                                        subtitle="รอดำเนินการ"
+                                        icon="Clock"
+                                        colorClass="text-slate-600"
+                                        gradientClass="from-slate-400 to-slate-500"
+                                    />
+                                    <MetricCard 
+                                        title="ความคืบหน้า" 
+                                        value={`${projectInfo.progress}%`} 
+                                        subtitle="ภาพรวมโครงการ"
+                                        icon="Percent"
+                                        colorClass="text-emerald-600"
+                                        gradientClass="from-emerald-400 to-teal-500"
+                                    />
+                                </div>
 
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Donut Chart */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 lg:col-span-1 flex flex-col">
-            <h3 className="font-semibold text-slate-800 mb-6 flex items-center">
-              <AlertCircle className="w-5 h-5 mr-2 text-slate-400" />
-              สัดส่วนการดำเนินงาน
-            </h3>
-            <div className="flex-1 relative min-h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={70}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip 
-                    formatter={(value) => [`${value} ต้น`, 'จำนวน']}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Center Text */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-3xl font-bold text-slate-800">{projectInfo.total}</span>
-                <span className="text-sm text-slate-500">ต้นทั้งหมด</span>
-              </div>
-            </div>
-            <div className="flex justify-center space-x-6 mt-4">
-              {pieData.map((entry, index) => (
-                <div key={index} className="flex items-center text-sm">
-                  <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: entry.color }}></span>
-                  <span className="text-slate-600">{entry.name} <span className="font-semibold text-slate-800 ml-1">{entry.value}</span></span>
+                                {/* Progress Bar - Premium Solar Style */}
+                                <div className="bg-white rounded-2xl p-6 shadow-lg shadow-slate-200/40 border border-slate-100 flex-shrink-0">
+                                    <div className="flex justify-between items-end mb-3">
+                                        <h3 className="font-semibold text-slate-800 flex items-center">
+                                            <Icon name="Sun" className="w-5 h-5 mr-2 text-amber-500" size={20} />
+                                            ความคืบหน้าโครงการทั้งหมด
+                                        </h3>
+                                        <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-orange-600">
+                                            {projectInfo.progress}%
+                                        </span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden shadow-inner">
+                                        <div 
+                                            className="h-3 rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 transition-all duration-1000 ease-out relative"
+                                            style={{ width: `${projectInfo.progress}%` }}
+                                        >
+                                            <div className="absolute top-0 right-0 bottom-0 left-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGcgdHJhbnNmb3JtPSJyb3RhdGUoNDUpIj48bGluZSB4MT0iLTIwIiB5MT0iMCIgeDI9IjQwIiB5Mj0iMCIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMikiIHN0cm9rZS13aWR0aD0iNSIvPjwvZz48L3N2Zz4=')] opacity-50 animate-[slide_2s_linear_infinite]"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Charts Area */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 flex-1 min-h-[300px]">
+                                    
+                                    {/* Donut Chart */}
+                                    <div className="bg-white rounded-2xl p-5 shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col items-center justify-center">
+                                        <h3 className="font-semibold text-slate-800 mb-2 w-full text-left">สัดส่วนงาน</h3>
+                                        <div className="flex-1 w-full relative">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <PieChart>
+                                                    <Pie
+                                                        data={pieData}
+                                                        cx="50%"
+                                                        cy="50%"
+                                                        innerRadius="65%"
+                                                        outerRadius="85%"
+                                                        paddingAngle={4}
+                                                        dataKey="value"
+                                                        stroke="none"
+                                                    >
+                                                        {pieData.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                                        ))}
+                                                    </Pie>
+                                                    <RechartsTooltip 
+                                                        formatter={(value) => [`${value} ต้น`, 'จำนวน']}
+                                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                                    />
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                                <span className="text-3xl font-bold text-slate-800">{projectInfo.total}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex space-x-4 mt-2 text-xs">
+                                            <div className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 mr-1.5"></span>แล้วเสร็จ</div>
+                                            <div className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-slate-200 mr-1.5"></span>คงเหลือ</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Bar Chart */}
+                                    <div className="bg-white rounded-2xl p-5 shadow-lg shadow-slate-200/40 border border-slate-100 md:col-span-2 flex flex-col">
+                                        <h3 className="font-semibold text-slate-800 mb-4">จำแนกตามพื้นที่</h3>
+                                        <div className="flex-1 w-full">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={locationData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                    <XAxis dataKey="shortName" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
+                                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
+                                                    <RechartsTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}/>
+                                                    <Bar dataKey="installed" name="ติดตั้งแล้ว" stackId="a" fill="#f59e0b" radius={[0, 0, 4, 4]} />
+                                                    <Bar dataKey="remaining" name="คงเหลือ" stackId="a" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right Column (Data Table) */}
+                            <div className="lg:col-span-4 bg-white rounded-2xl shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col h-[500px] lg:h-auto overflow-hidden">
+                                <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center flex-shrink-0">
+                                    <h3 className="font-semibold text-slate-800 flex items-center">
+                                        <Icon name="MapPin" className="w-4 h-4 mr-2 text-amber-500" size={16} />
+                                        ตารางสรุปรายพื้นที่
+                                    </h3>
+                                    <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">{locationData.length} พื้นที่</span>
+                                </div>
+                                <div className="flex-1 overflow-auto custom-scrollbar">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-slate-50/90 backdrop-blur-sm text-slate-600 font-medium sticky top-0 z-10 border-b border-slate-200">
+                                            <tr>
+                                                <th className="px-4 py-3 whitespace-nowrap">พื้นที่</th>
+                                                <th className="px-4 py-3 text-center whitespace-nowrap">รวม</th>
+                                                <th className="px-4 py-3 text-center whitespace-nowrap">เสร็จ</th>
+                                                <th className="px-4 py-3 text-center whitespace-nowrap">สถานะ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {locationData.map((row) => {
+                                                const percentage = ((row.installed / row.total) * 100).toFixed(0);
+                                                const isComplete = row.installed === row.total;
+                                                return (
+                                                    <tr key={row.id} className="hover:bg-amber-50/30 transition-colors">
+                                                        <td className="px-4 py-3 font-medium text-slate-700">
+                                                            <div className="max-w-[120px] truncate" title={row.name}>{row.shortName}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center font-medium text-slate-600">{row.total}</td>
+                                                        <td className="px-4 py-3 text-center text-amber-600 font-semibold">{row.installed}</td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            {isComplete ? (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
+                                                                    100%
+                                                                </span>
+                                                            ) : row.installed > 0 ? (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+                                                                    {percentage}%
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">
+                                                                    รอเริ่ม
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+                    <style dangerouslySetInnerHTML={{__html: `
+                        @keyframes slide {
+                            0% { background-position: 0 0; }
+                            100% { background-position: 40px 0; }
+                        }
+                    `}} />
                 </div>
-              ))}
-            </div>
-          </div>
+            );
+        };
 
-          {/* Bar Chart */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 lg:col-span-2">
-             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-semibold text-slate-800 flex items-center">
-                <MapPin className="w-5 h-5 mr-2 text-slate-400" />
-                ความคืบหน้าจำแนกตามพื้นที่
-              </h3>
-            </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={locationData}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 40 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="shortName" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#64748b', fontSize: 12 }} 
-                    angle={-45} 
-                    textAnchor="end"
-                    interval={0}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#64748b', fontSize: 12 }} 
-                  />
-                  <RechartsTooltip 
-                    cursor={{ fill: '#f8fafc' }}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Legend verticalAlign="top" height={36} iconType="circle" />
-                  <Bar dataKey="installed" name="ติดตั้งแล้ว" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
-                  <Bar dataKey="remaining" name="คงเหลือ" stackId="a" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        {/* Data Table */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-6 border-b border-slate-100">
-             <h3 className="font-semibold text-slate-800">รายละเอียดข้อมูลรายพื้นที่</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-4 rounded-tl-lg">ลำดับที่</th>
-                  <th className="px-6 py-4">พิกัดจุดที่ (พื้นที่)</th>
-                  <th className="px-6 py-4 text-center">จำนวนโคมไฟทั้งหมด</th>
-                  <th className="px-6 py-4 text-center">ติดตั้งแล้วเสร็จ</th>
-                  <th className="px-6 py-4 text-center">คงเหลือ</th>
-                  <th className="px-6 py-4 text-center">สถานะ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {locationData.map((row, index) => {
-                  const percentage = ((row.installed / row.total) * 100).toFixed(0);
-                  const isComplete = row.installed === row.total;
-                  
-                  return (
-                    <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 text-slate-500">{index + 1}</td>
-                      <td className="px-6 py-4 font-medium text-slate-800">{row.name}</td>
-                      <td className="px-6 py-4 text-center font-medium">{row.total}</td>
-                      <td className="px-6 py-4 text-center text-emerald-600 font-semibold">{row.installed}</td>
-                      <td className="px-6 py-4 text-center text-slate-500">{row.remaining}</td>
-                      <td className="px-6 py-4 text-center">
-                        {isComplete ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                            เสร็จสิ้น
-                          </span>
-                        ) : row.installed > 0 ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            กำลังดำเนินการ ({percentage}%)
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
-                            รอดำเนินการ
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-};
-
-export default Dashboard;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Dashboard />);
+    </script>
+</body>
+</html>
