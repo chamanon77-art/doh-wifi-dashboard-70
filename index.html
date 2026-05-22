@@ -72,15 +72,15 @@
         }
 
         /* ตกแต่ง Scrollbar ให้ดูเป็นเส้นแสง */
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.3); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.3); border-radius: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0, 240, 255, 0.8); }
 
         /* Animation เส้นพลังงานแบบ Tesla */
         .power-flow-line {
             stroke-dasharray: 8 8;
-            animation: flow 1s linear infinite;
+            animation: flow 1.5s linear infinite;
         }
         @keyframes flow {
             from { stroke-dashoffset: 16; }
@@ -208,7 +208,7 @@
                         <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${bgMap[color]} opacity-50 blur-2xl`}></div>
                         
                         <div className="flex justify-between items-start mb-2 relative z-10">
-                            <h3 className="text-xs font-semibold text-noc-textsec uppercase tracking-widest">{title}</h3>
+                            <h3 className="text-sm font-semibold text-noc-textsec uppercase tracking-widest">{title}</h3>
                             <div className={`p-1.5 rounded border border-opacity-50 bg-black/50 ${colorMap[color]} group-hover:scale-110 transition-transform`}>
                                 <Icon name={icon} size={16} />
                             </div>
@@ -218,61 +218,57 @@
                             <div className={`text-4xl xl:text-5xl font-black tracking-tight ${color === 'gold' ? 'glow-text-gold text-noc-gold' : color === 'cyan' ? 'glow-text-cyan text-noc-cyan' : color === 'green' ? 'text-noc-green' : 'text-noc-orange'}`}>
                                 {value}
                             </div>
-                            {subtitle && <p className="text-[10px] text-noc-textsec mt-1 uppercase">{subtitle}</p>}
+                            {subtitle && <p className="text-[11px] text-noc-textsec mt-1 uppercase">{subtitle}</p>}
                         </div>
                     </div>
                 );
             };
 
-            // Tesla Style Power Flow Component
+            // Horizontal Left -> Right Power Flow Component
             const PowerFlowWidget = () => (
-                <div className="h-full w-full relative min-h-[240px] overflow-visible">
+                <div className="h-full w-full relative min-h-[220px] overflow-visible">
                     {/* SVG Connections */}
                     <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
-                        {/* Solar to Center */}
-                        <path d="M 50%,20% L 50%,50%" fill="none" stroke="#F6C453" strokeWidth="2" className="power-flow-line" />
-                        {/* Center to Battery */}
-                        <path d="M 50%,50% L 50%,80%" fill="none" stroke="#00FF66" strokeWidth="2" className="power-flow-line" />
-                        {/* Center to LED */}
+                        {/* Solar (Left 20%) to Battery (Center 50%) */}
+                        <path d="M 20%,50% L 50%,50%" fill="none" stroke="#F6C453" strokeWidth="2" className="power-flow-line" />
+                        {/* Battery (Center 50%) to LED (Right 80%) */}
                         <path d="M 50%,50% L 80%,50%" fill="none" stroke="#00F0FF" strokeWidth="2" className="power-flow-line" />
-                        
-                        {/* Center Junction Dot */}
-                        <circle cx="50%" cy="50%" r="4" fill="#F6C453" className="animate-pulse" />
                     </svg>
 
-                    {/* Nodes positioned at exact percentages matching the SVG paths */}
+                    {/* Nodes positioned perfectly at the SVG junction points */}
                     
-                    {/* Solar (Top) */}
-                    <div className="absolute top-[20%] left-[50%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
-                        <span className="text-noc-gold font-bold text-[10px] mb-1.5 whitespace-nowrap drop-shadow-md">แผงโซล่าเซลล์</span>
-                        <div className="w-12 h-12 rounded-full bg-black/90 border border-noc-gold shadow-[0_0_15px_rgba(246,196,83,0.5)] flex items-center justify-center relative">
-                            <div className="absolute inset-0 rounded-full border border-noc-gold border-dashed animate-[spin_10s_linear_infinite] opacity-50"></div>
-                            <Icon name="Sun" size={24} className="text-noc-gold animate-pulse-slow" />
+                    {/* Solar (Left) */}
+                    <div className="absolute top-[50%] left-[20%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
+                        <span className="text-noc-gold font-bold text-[11px] lg:text-xs mb-2 whitespace-nowrap drop-shadow-md">แผงโซล่าเซลล์</span>
+                        <div className="w-14 h-14 rounded-xl bg-black/90 border-2 border-noc-gold shadow-[0_0_15px_rgba(246,196,83,0.5)] flex items-center justify-center relative">
+                            <div className="absolute inset-0 rounded-xl border border-noc-gold border-dashed animate-[spin_10s_linear_infinite] opacity-50"></div>
+                            <Icon name="Sun" size={28} className="text-noc-gold animate-pulse-slow" />
                         </div>
-                        <span className="text-noc-gold font-mono text-[9px] mt-1 whitespace-nowrap bg-black/60 px-1.5 py-0.5 rounded">GENERATION</span>
+                        <span className="text-noc-gold font-mono text-[10px] mt-2 whitespace-nowrap bg-black/60 px-2 py-0.5 rounded">GENERATION</span>
+                    </div>
+
+                    {/* Battery (Center) */}
+                    <div className="absolute top-[50%] left-[50%] transform -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
+                        <span className="text-noc-green font-bold text-[11px] lg:text-xs mb-2 whitespace-nowrap drop-shadow-md">แบตเตอรี่</span>
+                        <div className="bg-gradient-to-b from-slate-100 to-slate-300 w-24 h-12 rounded shadow-[0_5px_15px_rgba(0,0,0,0.8)] flex relative overflow-hidden border border-slate-400">
+                            {/* Green battery level indicator on the right edge */}
+                            <div className="absolute right-0 top-0 bottom-0 w-3 bg-noc-green shadow-[0_0_10px_rgba(0,255,102,1)]"></div>
+                            <div className="w-full flex flex-col items-center justify-center pr-2 h-full">
+                                <span className="text-slate-800 font-black text-xs tracking-widest leading-none">BATTERY</span>
+                                <span className="text-slate-600 font-bold text-[10px] mt-1 tracking-wider leading-none">100%</span>
+                            </div>
+                        </div>
+                        <span className="text-noc-green font-mono text-[10px] mt-2 whitespace-nowrap bg-black/60 px-2 py-0.5 rounded">STORAGE</span>
                     </div>
 
                     {/* LED (Right) */}
                     <div className="absolute top-[50%] left-[80%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
-                        <span className="text-noc-cyan font-bold text-[10px] mb-1.5 whitespace-nowrap drop-shadow-md">โคมไฟถนน LED</span>
-                        <div className="w-12 h-12 rounded-full bg-black/90 border border-noc-cyan shadow-[0_0_15px_rgba(0,240,255,0.5)] flex items-center justify-center relative">
+                        <span className="text-noc-cyan font-bold text-[11px] lg:text-xs mb-2 whitespace-nowrap drop-shadow-md">โคมไฟถนน LED</span>
+                        <div className="w-14 h-14 rounded-full bg-black/90 border-2 border-noc-cyan shadow-[0_0_15px_rgba(0,240,255,0.5)] flex items-center justify-center relative">
                             <div className="absolute inset-0 rounded-full border border-noc-cyan border-dashed animate-[spin_10s_linear_infinite_reverse] opacity-50"></div>
-                            <Icon name="Lightbulb" size={24} className="text-noc-cyan" />
+                            <Icon name="Lightbulb" size={28} className="text-noc-cyan" />
                         </div>
-                        <span className="text-noc-cyan font-mono text-[9px] mt-1 whitespace-nowrap bg-black/60 px-1.5 py-0.5 rounded">LOAD</span>
-                    </div>
-
-                    {/* Battery (Bottom) - Tesla Powerwall Style */}
-                    <div className="absolute top-[80%] left-[50%] transform -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
-                        <div className="bg-gradient-to-b from-slate-100 to-slate-300 w-24 h-12 rounded shadow-[0_5px_15px_rgba(0,0,0,0.8)] flex relative overflow-hidden border border-slate-400">
-                            {/* Green battery level indicator on the right edge */}
-                            <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-noc-green shadow-[0_0_10px_rgba(0,255,102,1)]"></div>
-                            <div className="w-full flex flex-col items-center justify-center pr-2 h-full">
-                                <span className="text-slate-800 font-black text-[12px] tracking-widest leading-none">BATTERY</span>
-                                <span className="text-slate-600 font-bold text-[9px] mt-1 tracking-wider leading-none">100%</span>
-                            </div>
-                        </div>
-                        <span className="text-noc-green font-bold text-[10px] mt-2 whitespace-nowrap drop-shadow-md">แบตเตอรี่ & คอนโทรลเลอร์</span>
+                        <span className="text-noc-cyan font-mono text-[10px] mt-2 whitespace-nowrap bg-black/60 px-2 py-0.5 rounded">LOAD</span>
                     </div>
                 </div>
             );
@@ -323,12 +319,12 @@
                         </div>
                         
                         <div className="flex items-center gap-6">
-                            <div className="hidden md:flex gap-6 text-[10px] font-mono text-noc-cyan">
-                                <div className="flex flex-col"><span className="text-slate-500">SYSTEM STATUS</span><span className="text-noc-green flex items-center"><Icon name="CheckCircle2" size={10} className="mr-1"/> ONLINE</span></div>
+                            <div className="hidden md:flex gap-6 text-[11px] font-mono text-noc-cyan">
+                                <div className="flex flex-col"><span className="text-slate-500">SYSTEM STATUS</span><span className="text-noc-green flex items-center"><Icon name="CheckCircle2" size={12} className="mr-1"/> ONLINE</span></div>
                                 <div className="flex flex-col"><span className="text-slate-500">API SYNC</span><span>{lastUpdated.toLocaleTimeString('th-TH')}</span></div>
                             </div>
                             <button onClick={fetchFromSheet} disabled={isFetching} className="p-2 bg-noc-cyan/10 border border-noc-cyan/30 rounded text-noc-cyan hover:bg-noc-cyan hover:text-black transition-colors">
-                                <Icon name="RefreshCw" className={isFetching ? 'animate-spin' : ''} size={16} />
+                                <Icon name="RefreshCw" className={isFetching ? 'animate-spin' : ''} size={18} />
                             </button>
                         </div>
                     </header>
@@ -347,9 +343,9 @@
                         {/* LEFT: Power Flow & Radial Gauge (25%) */}
                         <div className="lg:w-1/4 flex flex-col gap-3 min-h-0 flex-none lg:flex-1">
                             {/* Tesla Power Flow */}
-                            <div className="flex-1 scada-panel flex flex-col overflow-hidden min-h-[200px]">
-                                <div className="bg-black/30 px-4 py-2 border-b border-white/5 flex items-center text-[10px] font-bold tracking-widest text-noc-textsec">
-                                    <Icon name="Activity" size={12} className="mr-2 text-noc-cyan"/> POWER FLOW
+                            <div className="flex-1 scada-panel flex flex-col overflow-hidden min-h-[220px]">
+                                <div className="bg-black/30 px-4 py-3 border-b border-white/5 flex items-center text-xs font-bold tracking-widest text-noc-textsec uppercase">
+                                    <Icon name="Activity" size={14} className="mr-2 text-noc-cyan"/> POWER FLOW
                                 </div>
                                 <div className="flex-1 relative">
                                     <PowerFlowWidget />
@@ -358,7 +354,7 @@
 
                             {/* CAPACITY OVERVIEW */}
                             <div className="flex-1 scada-panel flex flex-col min-h-[200px]">
-                                <div className="bg-black/30 px-4 py-2 border-b border-white/5 text-[10px] font-bold tracking-widest text-noc-textsec">
+                                <div className="bg-black/30 px-4 py-3 border-b border-white/5 text-xs font-bold tracking-widest text-noc-textsec uppercase">
                                     CAPACITY OVERVIEW
                                 </div>
                                 <div className="flex-1 relative p-2 flex flex-col">
@@ -384,13 +380,13 @@
                                             </PieChart>
                                         </ResponsiveContainer>
                                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                            <span className="text-2xl lg:text-3xl font-black text-noc-cyan glow-text-cyan">{projectInfo.progress}%</span>
-                                            <span className="text-[9px] text-noc-textsec uppercase font-mono mt-1">COMPLETED</span>
+                                            <span className="text-3xl lg:text-4xl font-black text-noc-cyan glow-text-cyan">{projectInfo.progress}%</span>
+                                            <span className="text-[10px] lg:text-xs text-noc-textsec uppercase font-mono mt-1">COMPLETED</span>
                                         </div>
                                     </div>
-                                    <div className="flex justify-center gap-3 text-[9px] font-mono mt-2 flex-none">
-                                        <span className="flex items-center text-noc-cyan"><span className="w-2 h-2 rounded bg-noc-cyan mr-1"></span>เสร็จสิ้น {projectInfo.total > 0 ? ((projectInfo.installed/projectInfo.total)*100).toFixed(1) : 0}%</span>
-                                        <span className="flex items-center text-noc-orange"><span className="w-2 h-2 rounded bg-noc-orange mr-1"></span>รอติดตั้ง {projectInfo.total > 0 ? ((projectInfo.remaining/projectInfo.total)*100).toFixed(1) : 0}%</span>
+                                    <div className="flex justify-center gap-4 text-[10px] lg:text-xs font-mono mt-2 flex-none">
+                                        <span className="flex items-center text-noc-cyan"><span className="w-2.5 h-2.5 rounded bg-noc-cyan mr-1.5"></span>เสร็จสิ้น {projectInfo.total > 0 ? ((projectInfo.installed/projectInfo.total)*100).toFixed(1) : 0}%</span>
+                                        <span className="flex items-center text-noc-orange"><span className="w-2.5 h-2.5 rounded bg-noc-orange mr-1.5"></span>รอติดตั้ง {projectInfo.total > 0 ? ((projectInfo.remaining/projectInfo.total)*100).toFixed(1) : 0}%</span>
                                     </div>
                                 </div>
                             </div>
@@ -399,10 +395,10 @@
                         {/* CENTER: Main Analytics Chart (45%) */}
                         <div className="lg:w-[45%] scada-panel flex flex-col min-h-0 flex-none lg:flex-1">
                             <div className="bg-black/30 px-4 py-3 border-b border-white/5 flex justify-between items-center flex-none">
-                                <span className="text-[10px] font-bold tracking-widest text-noc-textsec">PERFORMANCE TREND & DEPLOYMENT</span>
-                                <div className="flex gap-3 text-[9px] font-mono">
-                                    <span className="flex items-center text-noc-cyan"><span className="w-2 h-2 rounded bg-noc-cyan mr-1"></span>TOTAL</span>
-                                    <span className="flex items-center text-noc-gold"><span className="w-2 h-2 rounded bg-noc-gold mr-1"></span>INSTALLED</span>
+                                <span className="text-xs font-bold tracking-widest text-noc-textsec uppercase">PERFORMANCE TREND & DEPLOYMENT</span>
+                                <div className="flex gap-4 text-xs font-mono">
+                                    <span className="flex items-center text-noc-cyan"><span className="w-2.5 h-2.5 rounded bg-noc-cyan mr-1.5"></span>TOTAL</span>
+                                    <span className="flex items-center text-noc-gold"><span className="w-2.5 h-2.5 rounded bg-noc-gold mr-1.5"></span>INSTALLED</span>
                                 </div>
                             </div>
                             <div className="flex-1 w-full p-4 min-h-[250px]">
@@ -419,8 +415,8 @@
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                                        <XAxis dataKey="shortName" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 9, fontFamily: 'monospace' }} />
-                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 9, fontFamily: 'monospace' }} />
+                                        <XAxis dataKey="shortName" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'monospace' }} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'monospace' }} />
                                         <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(0,240,255,0.2)', strokeWidth: 2, strokeDasharray: '4 4' }}/>
                                         
                                         <Area type="monotone" dataKey="total" name="Total Nodes" stroke="#00F0FF" strokeWidth={2} fillOpacity={1} fill="url(#colorTotal)" />
@@ -430,57 +426,57 @@
                             </div>
                         </div>
 
-                        {/* RIGHT: TopN & Data Table (30%) */}
+                        {/* RIGHT: Data Table (30%) */}
                         <div className="lg:w-[30%] flex flex-col gap-3 min-h-0 flex-none lg:flex-1">
                             
                             {/* Data Table Full Height */}
                             <div className="flex-1 scada-panel flex flex-col overflow-hidden">
-                                <div className="bg-black/30 px-4 py-3 border-b border-white/5 text-[10px] font-bold tracking-widest text-noc-textsec flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <Icon name="MapPin" size={14} className="text-noc-cyan" />
+                                <div className="bg-black/30 px-4 py-3 border-b border-white/5 flex justify-between items-center">
+                                    <div className="flex items-center gap-2 text-xs lg:text-sm font-bold tracking-widest text-noc-textsec uppercase">
+                                        <Icon name="MapPin" size={16} className="text-noc-cyan" />
                                         NODE STATUS DIRECTORY
                                     </div>
-                                    <span className="text-noc-cyan bg-noc-cyan/10 px-2 py-0.5 rounded border border-noc-cyan/20">
+                                    <span className="text-noc-cyan bg-noc-cyan/10 px-2.5 py-1 rounded border border-noc-cyan/20 text-[10px] lg:text-xs font-bold">
                                         {locationData.length} ZONES
                                     </span>
                                 </div>
                                 <div className="flex-1 overflow-auto custom-scrollbar relative">
                                     <table className="w-full text-left font-mono">
-                                        <thead className="text-[9px] text-slate-500 uppercase sticky top-0 bg-[#0A1121] z-10 shadow-md">
+                                        <thead className="text-xs text-slate-400 uppercase sticky top-0 bg-[#0A1121] z-10 shadow-md">
                                             <tr>
-                                                <th className="px-3 py-3 font-normal border-b border-white/10">Location</th>
-                                                <th className="px-2 py-3 text-right font-normal border-b border-white/10">Total</th>
-                                                <th className="px-2 py-3 text-right font-normal border-b border-white/10">Active</th>
-                                                <th className="px-2 py-3 text-center font-normal border-b border-white/10">Status</th>
+                                                <th className="px-3 py-3.5 font-semibold border-b border-white/10">Location</th>
+                                                <th className="px-2 py-3.5 text-right font-semibold border-b border-white/10">Total</th>
+                                                <th className="px-2 py-3.5 text-right font-semibold border-b border-white/10">Active</th>
+                                                <th className="px-2 py-3.5 text-center font-semibold border-b border-white/10">Status</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="text-[10px]">
+                                        <tbody className="text-sm font-medium">
                                             {locationData.map((row) => {
                                                 const pct = row.total > 0 ? Math.round((row.installed/row.total)*100) : 0;
                                                 return (
                                                     <tr key={row.id} className="hover:bg-noc-cyan/10 transition-colors group cursor-default border-b border-white/5">
-                                                        <td className="px-3 py-3 text-slate-300 group-hover:text-white truncate max-w-[120px]">{row.shortName}</td>
-                                                        <td className="px-2 py-3 text-right text-slate-500">{row.total}</td>
-                                                        <td className="px-2 py-3 text-right font-bold text-noc-gold">{row.installed}</td>
-                                                        <td className="px-2 py-3 text-center">
+                                                        <td className="px-3 py-4 text-slate-300 group-hover:text-white truncate max-w-[150px]">{row.shortName}</td>
+                                                        <td className="px-2 py-4 text-right text-slate-400">{row.total}</td>
+                                                        <td className="px-2 py-4 text-right font-bold text-noc-gold">{row.installed}</td>
+                                                        <td className="px-2 py-4 text-center">
                                                             {pct === 100 ? (
-                                                                <span className="text-noc-green">OK</span>
+                                                                <span className="text-noc-green bg-noc-green/10 px-2 py-0.5 rounded">OK</span>
                                                             ) : row.installed > 0 ? (
-                                                                <span className="text-noc-orange">{pct}%</span>
+                                                                <span className="text-noc-orange bg-noc-orange/10 px-2 py-0.5 rounded">{pct}%</span>
                                                             ) : (
-                                                                <span className="text-slate-600">IDLE</span>
+                                                                <span className="text-slate-500 bg-white/5 px-2 py-0.5 rounded">IDLE</span>
                                                             )}
                                                         </td>
                                                     </tr>
                                                 );
                                             })}
                                         </tbody>
-                                        <tfoot className="text-[10px] font-bold sticky bottom-0 bg-[#0A1121] shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                                        <tfoot className="text-sm lg:text-base font-bold sticky bottom-0 bg-[#0A1121] shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
                                             <tr>
-                                                <td className="px-3 py-3 text-noc-gold border-t border-white/10">TOTAL / รวมทั้งหมด</td>
-                                                <td className="px-2 py-3 text-right text-noc-gold border-t border-white/10">{projectInfo.total}</td>
-                                                <td className="px-2 py-3 text-right text-noc-gold border-t border-white/10">{projectInfo.installed}</td>
-                                                <td className="px-2 py-3 text-center text-noc-gold border-t border-white/10">
+                                                <td className="px-3 py-4 text-noc-gold border-t border-white/10">TOTAL / รวมทั้งหมด</td>
+                                                <td className="px-2 py-4 text-right text-noc-gold border-t border-white/10">{projectInfo.total}</td>
+                                                <td className="px-2 py-4 text-right text-noc-gold border-t border-white/10">{projectInfo.installed}</td>
+                                                <td className="px-2 py-4 text-center text-noc-gold border-t border-white/10">
                                                     {projectInfo.progress}%
                                                 </td>
                                             </tr>
