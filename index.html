@@ -3,87 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard โครงการติดตั้งโคมไฟถนนพลังงานแสงอาทิตย์</title>
+    <title>Solar SCADA NOC Dashboard</title>
     
-    <!-- นำเข้าฟอนต์ Prompt จาก Google Fonts -->
+    <!-- ฟอนต์ IBM Plex Sans Thai ระดับ Premium -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- นำเข้า Tailwind CSS และตั้งค่าธีม -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Prompt', 'sans-serif'],
+                        sans: ['"IBM Plex Sans Thai"', 'sans-serif'],
                     },
                     colors: {
-                        solar: {
-                            50: '#fffbeb',
-                            100: '#fef3c7',
-                            400: '#fbbf24',
-                            500: '#f59e0b',
-                            600: '#d97706',
+                        noc: {
+                            bg: '#050B14',
+                            panel: 'rgba(12, 22, 45, 0.65)',
+                            border: 'rgba(0, 240, 255, 0.15)',
+                            cyan: '#00F0FF',
+                            gold: '#F6C453',
+                            orange: '#FF8A00',
+                            green: '#00FF66',
+                            textpri: '#F8FAFC',
+                            textsec: '#64748B'
                         }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                     }
                 }
             }
         }
     </script>
     
-    <!-- นำเข้า React และ ReactDOM -->
+    <!-- React & Recharts -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-is@18/umd/react-is.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- นำเข้า Recharts -->
     <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
     <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
 
     <style>
-        /* ซ่อน Scrollbar ของหน้าต่างหลัก แต่ยังให้เลื่อนได้ถ้าจอเล็กมาก */
-        body { overflow-x: hidden; }
-        /* ตกแต่ง Scrollbar สำหรับตารางให้ดูพรีเมี่ยม */
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        /* บังคับเต็มจอแบบ 100vh ไม่มี Scroll นอกกรอบ */
+        body, html { 
+            margin: 0; padding: 0;
+            height: 100vh; width: 100vw;
+            overflow: hidden;
+            background-color: #050B14;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.08), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(255, 138, 0, 0.08), transparent 25%);
+            color: #F8FAFC;
+        }
+        
+        /* Glass Panel สไตล์ SCADA/NOC */
+        .scada-panel {
+            background: rgba(12, 22, 45, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 240, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 240, 255, 0.02);
+            border-radius: 16px;
+        }
+
+        /* ตกแต่ง Scrollbar ให้ดูเป็นเส้นแสง */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.3); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0, 240, 255, 0.8); }
+
+        /* Animation เส้นพลังงานแบบ Tesla */
+        .power-flow-line {
+            stroke-dasharray: 8 8;
+            animation: flow 1s linear infinite;
+        }
+        @keyframes flow {
+            from { stroke-dashoffset: 16; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Glowing Text */
+        .glow-text-gold { text-shadow: 0 0 15px rgba(246, 196, 83, 0.5); }
+        .glow-text-cyan { text-shadow: 0 0 15px rgba(0, 240, 255, 0.5); }
     </style>
 </head>
-<body class="bg-[#f8fafc] text-slate-800">
+<body class="antialiased font-sans">
     
-    <div id="root"></div>
+    <div id="root" class="h-full w-full"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
-        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
+        const { useState, useEffect, useMemo } = React;
+        const { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, ResponsiveContainer, RadialBarChart, RadialBar, Cell, PieChart, Pie } = window.Recharts;
 
-        // ---- Icons Component ----
-        const iconPaths = {
+        // ---- Icons (Lucide) ----
+        const Icons = {
             Sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></>,
             Lightbulb: <><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></>,
             CheckCircle2: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>,
             Clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
-            Percent: <><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></>,
             MapPin: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></>,
             RefreshCw: <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>,
-            Link2: <><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></>
+            Activity: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></>,
+            Battery: <><rect x="1" y="6" width="18" height="12" rx="2" ry="2"/><line x1="23" y1="13" x2="23" y2="11"/></>,
+            Cpu: <><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></>,
+            Radio: <><circle cx="12" cy="12" r="2"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14"/><path d="M7.76 16.24a6 6 0 0 1 0-8.49"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></>
         };
 
-        const Icon = ({ name, className = "", size = 24 }) => (
+        const Icon = ({ name, className = "", size = 20 }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                {iconPaths[name]}
+                {Icons[name]}
             </svg>
         );
 
         const Dashboard = () => {
             const [projectInfo, setProjectInfo] = useState({
-                title: "โครงการติดตั้งโคมไฟถนนพลังงานแสงอาทิตย์",
-                subtitle: "พร้อมเสาไฟเลื่อนปรับระดับและฐานรากเข็มเหล็ก",
-                location: "ในเขตพื้นที่ตำบลบางบัวทอง จังหวัดนนทบุรี",
+                title: "SMART SOLAR STREETLIGHT MGT.",
+                location: "BANG BUA THONG, NONTHABURI",
                 total: 224,
                 installed: 14,
                 remaining: 210,
@@ -96,325 +136,361 @@
                 { id: 3, name: 'ถนนเลียบคลองพระพิมล', shortName: 'ถ.คลองพระพิมล', total: 41, installed: 14, remaining: 27 },
                 { id: 4, name: 'ถนนเลียบคลองลากค้อน', shortName: 'ถ.คลองลากค้อน', total: 43, installed: 0, remaining: 43 },
                 { id: 5, name: 'ถนนเส้นบ้านผู้ใหญ่ชูถึงบ้านบังตุ๊', shortName: 'ถ.บ้านผู้ใหญ่ชูฯ', total: 35, installed: 0, remaining: 35 },
+                { id: 6, name: 'ถนนประดูน้ำคลองลำสีถึงบ้านนาย', shortName: 'ถ.คลองลำสีฯ', total: 26, installed: 0, remaining: 26 },
+                { id: 7, name: 'ถนนเลียบคลองลัดตาต่อม', shortName: 'ถ.คลองลัดตาต่อม', total: 8, installed: 0, remaining: 8 },
             ]);
 
             const defaultSheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQjbLRt-AUTah9KormRCSDgSgIsE5Oa5HKdXuVtbIG6ZSkHae_OVIN9M8hbrhvzAw/pub?output=csv';
-            const [sheetUrl, setSheetUrl] = useState(defaultSheetUrl);
             const [isFetching, setIsFetching] = useState(false);
             const [lastUpdated, setLastUpdated] = useState(new Date());
-            const [showSettings, setShowSettings] = useState(false);
 
-            // สีทีมพลังงานแสงอาทิตย์ (Amber = พลังงาน/ติดตั้งแล้ว, Slate = รอติดตั้ง)
-            const pieData = [
-                { name: 'ติดตั้งแล้วเสร็จ', value: projectInfo.installed, color: '#f59e0b' }, 
-                { name: 'คงเหลือ', value: projectInfo.remaining, color: '#e2e8f0' }, 
-            ];
-
-            const parseCSVData = (text) => {
-                const lines = text.split('\n');
-                try {
-                    const infoLine = lines[4].split(',');
-                    const newTotal = parseInt(infoLine[1]) || 0;
-                    const newInstalled = parseInt(infoLine[3]) || 0;
-                    const newRemaining = parseInt(infoLine[5]) || 0;
-                    const newProgress = newTotal > 0 ? ((newInstalled / newTotal) * 100).toFixed(2) : 0;
-
-                    setProjectInfo(prev => ({
-                        ...prev,
-                        total: newTotal,
-                        installed: newInstalled,
-                        remaining: newRemaining,
-                        progress: parseFloat(newProgress)
-                    }));
-
-                    const startIdx = lines.findIndex(l => l.includes('พิกัดจุดที่'));
-                    if (startIdx !== -1) {
-                        const newLocations = [];
-                        for (let i = startIdx + 1; i < lines.length; i++) {
-                            if (!lines[i] || lines[i].trim() === '') continue;
-                            
-                            const cols = lines[i].split(',');
-                            if (cols.length > 2 && cols[1] && !isNaN(parseInt(cols[2]))) {
-                                const fullName = cols[1].replace(/^\d+\.\s*/, '');
-                                let shortName = fullName;
-                                if (shortName.startsWith('ซอย')) shortName = shortName.replace('ซอย', 'ซ.');
-                                if (shortName.startsWith('ถนนเลียบคลอง')) shortName = shortName.replace('ถนนเลียบคลอง', 'ถ.คลอง');
-                                if (shortName.startsWith('ถนน')) shortName = shortName.replace('ถนน', 'ถ.');
-                                if (shortName.length > 15) shortName = shortName.substring(0, 15) + '...';
-
-                                newLocations.push({
-                                    id: i,
-                                    name: fullName,
-                                    shortName: shortName,
-                                    total: parseInt(cols[2] || 0),
-                                    installed: parseInt(cols[3] || 0),
-                                    remaining: parseInt(cols[4] || 0)
-                                });
-                            }
-                        }
-                        if (newLocations.length > 0) setLocationData(newLocations);
-                    }
-                    setLastUpdated(new Date());
-                } catch (error) {
-                    console.error(error);
-                }
-            };
-
-            const fetchFromSheet = async (customUrl) => {
-                const targetUrl = typeof customUrl === 'string' ? customUrl : sheetUrl;
-                if (!targetUrl) return;
+            const fetchFromSheet = async () => {
                 setIsFetching(true);
                 try {
-                    const response = await fetch(targetUrl);
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    const text = await response.text();
-                    parseCSVData(text);
-                    setShowSettings(false);
-                } catch (error) {
-                    console.error('Fetch error:', error);
-                } finally {
-                    setIsFetching(false);
-                }
+                    const response = await fetch(defaultSheetUrl);
+                    if (response.ok) {
+                        const text = await response.text();
+                        const lines = text.split('\n');
+                        const infoLine = lines[4].split(',');
+                        const newTotal = parseInt(infoLine[1]) || 0;
+                        const newInstalled = parseInt(infoLine[3]) || 0;
+                        const newRemaining = parseInt(infoLine[5]) || 0;
+                        const newProgress = newTotal > 0 ? ((newInstalled / newTotal) * 100).toFixed(2) : 0;
+
+                        setProjectInfo(prev => ({
+                            ...prev, total: newTotal, installed: newInstalled, remaining: newRemaining, progress: parseFloat(newProgress)
+                        }));
+
+                        const startIdx = lines.findIndex(l => l.includes('พิกัดจุดที่'));
+                        if (startIdx !== -1) {
+                            const newLocs = [];
+                            for (let i = startIdx + 1; i < lines.length; i++) {
+                                if (!lines[i] || lines[i].trim() === '') continue;
+                                const cols = lines[i].split(',');
+                                // ป้องกันการนำแถว "รวม" มาใส่เป็น Zone
+                                if (cols[1] && cols[1].includes('รวม')) continue;
+                                if (cols.length > 2 && cols[1] && !isNaN(parseInt(cols[2]))) {
+                                    let short = cols[1].replace(/^\d+\.\s*/, '');
+                                    if(short.length > 15) short = short.substring(0, 15) + '...';
+                                    newLocs.push({
+                                        id: i, name: cols[1].replace(/^\d+\.\s*/, ''), shortName: short,
+                                        total: parseInt(cols[2] || 0), installed: parseInt(cols[3] || 0), remaining: parseInt(cols[4] || 0)
+                                    });
+                                }
+                            }
+                            if (newLocs.length > 0) setLocationData(newLocs);
+                        }
+                        setLastUpdated(new Date());
+                    }
+                } catch (error) { console.error(error); } 
+                finally { setIsFetching(false); }
             };
 
-            useEffect(() => {
-                fetchFromSheet(defaultSheetUrl);
-            }, []);
+            useEffect(() => { fetchFromSheet(); }, []);
 
-            // Premium Metric Card
-            const MetricCard = ({ title, value, subtitle, icon, colorClass, gradientClass }) => (
-                <div className="bg-white rounded-2xl p-5 shadow-lg shadow-slate-200/40 border border-slate-100 flex items-start space-x-4 relative overflow-hidden group">
-                    <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${gradientClass} opacity-10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110`}></div>
-                    <div className={`p-3 rounded-xl bg-gradient-to-br ${gradientClass} text-white shadow-md z-10`}>
-                        <Icon name={icon} size={24} />
+            // ---- Components ----
+            const NOCMetricCard = ({ title, value, subtitle, icon, color = 'cyan' }) => {
+                const colorMap = {
+                    cyan: 'text-noc-cyan border-noc-cyan shadow-[0_0_15px_rgba(0,240,255,0.2)]',
+                    gold: 'text-noc-gold border-noc-gold shadow-[0_0_15px_rgba(246,196,83,0.2)]',
+                    orange: 'text-noc-orange border-noc-orange shadow-[0_0_15px_rgba(255,138,0,0.2)]',
+                    green: 'text-noc-green border-noc-green shadow-[0_0_15px_rgba(0,255,102,0.2)]'
+                };
+                const bgMap = {
+                    cyan: 'from-noc-cyan/20 to-transparent',
+                    gold: 'from-noc-gold/20 to-transparent',
+                    orange: 'from-noc-orange/20 to-transparent',
+                    green: 'from-noc-green/20 to-transparent'
+                };
+                
+                return (
+                    <div className="scada-panel p-4 relative overflow-hidden flex flex-col justify-center h-full group">
+                        <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${bgMap[color]} opacity-50 blur-2xl`}></div>
+                        
+                        <div className="flex justify-between items-start mb-2 relative z-10">
+                            <h3 className="text-xs font-semibold text-noc-textsec uppercase tracking-widest">{title}</h3>
+                            <div className={`p-1.5 rounded border border-opacity-50 bg-black/50 ${colorMap[color]} group-hover:scale-110 transition-transform`}>
+                                <Icon name={icon} size={16} />
+                            </div>
+                        </div>
+
+                        <div className="relative z-10">
+                            <div className={`text-4xl xl:text-5xl font-black tracking-tight ${color === 'gold' ? 'glow-text-gold text-noc-gold' : color === 'cyan' ? 'glow-text-cyan text-noc-cyan' : color === 'green' ? 'text-noc-green' : 'text-noc-orange'}`}>
+                                {value}
+                            </div>
+                            {subtitle && <p className="text-[10px] text-noc-textsec mt-1 uppercase">{subtitle}</p>}
+                        </div>
                     </div>
-                    <div className="z-10">
-                        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-                        <h3 className={`text-2xl lg:text-3xl font-bold ${colorClass}`}>{value}</h3>
-                        {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
+                );
+            };
+
+            // Tesla Style Power Flow Component
+            const PowerFlowWidget = () => (
+                <div className="h-full w-full relative min-h-[240px] overflow-visible">
+                    {/* SVG Connections */}
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
+                        {/* Solar to Center */}
+                        <path d="M 50%,20% L 50%,50%" fill="none" stroke="#F6C453" strokeWidth="2" className="power-flow-line" />
+                        {/* Center to Battery */}
+                        <path d="M 50%,50% L 50%,80%" fill="none" stroke="#00FF66" strokeWidth="2" className="power-flow-line" />
+                        {/* Center to LED */}
+                        <path d="M 50%,50% L 80%,50%" fill="none" stroke="#00F0FF" strokeWidth="2" className="power-flow-line" />
+                        
+                        {/* Center Junction Dot */}
+                        <circle cx="50%" cy="50%" r="4" fill="#F6C453" className="animate-pulse" />
+                    </svg>
+
+                    {/* Nodes positioned at exact percentages matching the SVG paths */}
+                    
+                    {/* Solar (Top) */}
+                    <div className="absolute top-[20%] left-[50%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
+                        <span className="text-noc-gold font-bold text-[10px] mb-1.5 whitespace-nowrap drop-shadow-md">แผงโซล่าเซลล์</span>
+                        <div className="w-12 h-12 rounded-full bg-black/90 border border-noc-gold shadow-[0_0_15px_rgba(246,196,83,0.5)] flex items-center justify-center relative">
+                            <div className="absolute inset-0 rounded-full border border-noc-gold border-dashed animate-[spin_10s_linear_infinite] opacity-50"></div>
+                            <Icon name="Sun" size={24} className="text-noc-gold animate-pulse-slow" />
+                        </div>
+                        <span className="text-noc-gold font-mono text-[9px] mt-1 whitespace-nowrap bg-black/60 px-1.5 py-0.5 rounded">GENERATION</span>
+                    </div>
+
+                    {/* LED (Right) */}
+                    <div className="absolute top-[50%] left-[80%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
+                        <span className="text-noc-cyan font-bold text-[10px] mb-1.5 whitespace-nowrap drop-shadow-md">โคมไฟถนน LED</span>
+                        <div className="w-12 h-12 rounded-full bg-black/90 border border-noc-cyan shadow-[0_0_15px_rgba(0,240,255,0.5)] flex items-center justify-center relative">
+                            <div className="absolute inset-0 rounded-full border border-noc-cyan border-dashed animate-[spin_10s_linear_infinite_reverse] opacity-50"></div>
+                            <Icon name="Lightbulb" size={24} className="text-noc-cyan" />
+                        </div>
+                        <span className="text-noc-cyan font-mono text-[9px] mt-1 whitespace-nowrap bg-black/60 px-1.5 py-0.5 rounded">LOAD</span>
+                    </div>
+
+                    {/* Battery (Bottom) - Tesla Powerwall Style */}
+                    <div className="absolute top-[80%] left-[50%] transform -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
+                        <div className="bg-gradient-to-b from-slate-100 to-slate-300 w-24 h-12 rounded shadow-[0_5px_15px_rgba(0,0,0,0.8)] flex relative overflow-hidden border border-slate-400">
+                            {/* Green battery level indicator on the right edge */}
+                            <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-noc-green shadow-[0_0_10px_rgba(0,255,102,1)]"></div>
+                            <div className="w-full flex flex-col items-center justify-center pr-2 h-full">
+                                <span className="text-slate-800 font-black text-[12px] tracking-widest leading-none">BATTERY</span>
+                                <span className="text-slate-600 font-bold text-[9px] mt-1 tracking-wider leading-none">100%</span>
+                            </div>
+                        </div>
+                        <span className="text-noc-green font-bold text-[10px] mt-2 whitespace-nowrap drop-shadow-md">แบตเตอรี่ & คอนโทรลเลอร์</span>
                     </div>
                 </div>
             );
 
+            // Recharts Custom Tooltip (NOC Style)
+            const CustomTooltip = ({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                    return (
+                        <div className="bg-black/90 border border-noc-cyan/30 p-3 rounded-lg shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+                            <p className="text-white text-xs font-bold mb-2 border-b border-white/10 pb-1">{label}</p>
+                            {payload.map((entry, index) => (
+                                <p key={index} className="text-[11px] flex items-center justify-between gap-4 font-mono">
+                                    <span style={{ color: entry.color }}>{entry.name}</span>
+                                    <span className="text-white font-bold">{entry.value}</span>
+                                </p>
+                            ))}
+                        </div>
+                    );
+                }
+                return null;
+            };
+
             return (
-                <div className="p-4 md:p-6 lg:h-screen lg:overflow-hidden flex flex-col">
-                    <div className="max-w-[1600px] mx-auto w-full flex-1 flex flex-col space-y-4 lg:space-y-6">
-                        
-                        {/* Header Section */}
-                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white rounded-2xl p-5 md:p-6 shadow-lg shadow-slate-200/40 border border-slate-100 flex-shrink-0">
-                            <div className="flex items-center space-x-4">
-                                <div className="hidden md:flex items-center justify-center w-14 h-14 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full shadow-lg shadow-orange-500/30 text-white">
-                                    <Icon name="Sun" size={32} />
-                                </div>
-                                <div>
-                                    <h1 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight flex items-center">
-                                        Solar Dashboard
-                                        <span className="ml-3 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full border border-amber-200 uppercase tracking-wider">
-                                            Live
-                                        </span>
-                                    </h1>
-                                    <p className="text-slate-500 text-sm md:text-base mt-1">{projectInfo.title}</p>
+                <div className="h-full w-full flex flex-col p-3 lg:p-4 mx-auto max-w-[1920px] gap-3">
+                    
+                    {/* TOP BAR - Huawei NOC Style */}
+                    <header className="flex-none scada-panel px-5 py-3 flex justify-between items-center bg-black/40">
+                        <div className="flex items-center gap-4">
+                            {/* Premium Solar Glowing Logo */}
+                            <div className="relative flex items-center justify-center w-12 h-12">
+                                <div className="absolute inset-0 rounded-full bg-noc-gold opacity-20 animate-ping" style={{ animationDuration: '2s' }}></div>
+                                <div className="absolute inset-1 rounded-full bg-noc-orange opacity-40 animate-pulse"></div>
+                                <div className="relative w-10 h-10 rounded-full bg-black border border-noc-gold shadow-[0_0_20px_rgba(246,196,83,0.8)] flex items-center justify-center z-10">
+                                    <Icon name="Sun" size={24} className="text-noc-gold drop-shadow-[0_0_10px_rgba(246,196,83,1)]" />
                                 </div>
                             </div>
-                            
-                            <div className="mt-4 lg:mt-0 flex items-center space-x-3 w-full lg:w-auto">
-                                <div className="text-right hidden sm:block mr-2">
-                                    <p className="text-xs text-slate-400">ข้อมูลอัปเดตล่าสุด</p>
-                                    <p className="text-sm font-medium text-slate-700">{lastUpdated.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })} น.</p>
+                            <div>
+                                <h1 className="text-lg md:text-xl font-bold text-white tracking-widest flex items-center gap-3">
+                                    Solar Dashboard
+                                    <span className="px-2 py-0.5 bg-noc-gold/10 border border-noc-gold/40 text-noc-gold text-[9px] font-bold rounded uppercase tracking-widest shadow-[0_0_10px_rgba(246,196,83,0.2)]">
+                                        LIVE
+                                    </span>
+                                </h1>
+                                <p className="text-noc-textsec text-[11px] tracking-wide mt-0.5">
+                                    โครงการติดตั้งโคมไฟถนนพลังงานแสงอาทิตย์
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-6">
+                            <div className="hidden md:flex gap-6 text-[10px] font-mono text-noc-cyan">
+                                <div className="flex flex-col"><span className="text-slate-500">SYSTEM STATUS</span><span className="text-noc-green flex items-center"><Icon name="CheckCircle2" size={10} className="mr-1"/> ONLINE</span></div>
+                                <div className="flex flex-col"><span className="text-slate-500">API SYNC</span><span>{lastUpdated.toLocaleTimeString('th-TH')}</span></div>
+                            </div>
+                            <button onClick={fetchFromSheet} disabled={isFetching} className="p-2 bg-noc-cyan/10 border border-noc-cyan/30 rounded text-noc-cyan hover:bg-noc-cyan hover:text-black transition-colors">
+                                <Icon name="RefreshCw" className={isFetching ? 'animate-spin' : ''} size={16} />
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* KPI ROW */}
+                    <div className="flex-none grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <NOCMetricCard title="Total Capacity" value={projectInfo.total} subtitle="โคมไฟเป้าหมายทั้งหมด" icon="MapPin" color="cyan" />
+                        <NOCMetricCard title="Active Nodes" value={projectInfo.installed} subtitle="ดำเนินการเสร็จสิ้น" icon="Radio" color="green" />
+                        <NOCMetricCard title="Pending Deploy" value={projectInfo.remaining} subtitle="จุดรอดำเนินการติดตั้ง" icon="Clock" color="orange" />
+                        <NOCMetricCard title="Sys. Progress" value={`${projectInfo.progress}%`} subtitle="เปอร์เซ็นต์ความสำเร็จ" icon="Activity" color="gold" />
+                    </div>
+
+                    {/* MAIN CONTENT 3 COLUMNS */}
+                    <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0">
+                        
+                        {/* LEFT: Power Flow & Radial Gauge (25%) */}
+                        <div className="lg:w-1/4 flex flex-col gap-3 min-h-0 flex-none lg:flex-1">
+                            {/* Tesla Power Flow */}
+                            <div className="flex-1 scada-panel flex flex-col overflow-hidden min-h-[200px]">
+                                <div className="bg-black/30 px-4 py-2 border-b border-white/5 flex items-center text-[10px] font-bold tracking-widest text-noc-textsec">
+                                    <Icon name="Activity" size={12} className="mr-2 text-noc-cyan"/> POWER FLOW
                                 </div>
-                                <button 
-                                    onClick={fetchFromSheet}
-                                    disabled={isFetching}
-                                    className="flex-1 lg:flex-none inline-flex items-center justify-center px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition-all text-sm font-medium disabled:opacity-70 group"
-                                >
-                                    <Icon name="RefreshCw" className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} size={18} />
-                                    {isFetching ? 'กำลังซิงค์...' : 'อัปเดตข้อมูล'}
-                                </button>
+                                <div className="flex-1 relative">
+                                    <PowerFlowWidget />
+                                </div>
+                            </div>
+
+                            {/* CAPACITY OVERVIEW */}
+                            <div className="flex-1 scada-panel flex flex-col min-h-[200px]">
+                                <div className="bg-black/30 px-4 py-2 border-b border-white/5 text-[10px] font-bold tracking-widest text-noc-textsec">
+                                    CAPACITY OVERVIEW
+                                </div>
+                                <div className="flex-1 relative p-2 flex flex-col">
+                                    <div className="flex-1 relative min-h-[100px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={[
+                                                        { name: 'ดำเนินการเสร็จสิ้น', value: projectInfo.installed, color: '#00F0FF' },
+                                                        { name: 'จุดรอดำเนินการติดตั้ง', value: projectInfo.remaining, color: '#FF8A00' }
+                                                    ]}
+                                                    cx="50%" cy="50%" innerRadius="65%" outerRadius="85%"
+                                                    dataKey="value" stroke="none" paddingAngle={2}
+                                                >
+                                                    {[
+                                                        { name: 'ดำเนินการเสร็จสิ้น', value: projectInfo.installed, color: '#00F0FF' },
+                                                        { name: 'จุดรอดำเนินการติดตั้ง', value: projectInfo.remaining, color: '#FF8A00' }
+                                                    ].map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <RechartsTooltip content={<CustomTooltip />} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                            <span className="text-2xl lg:text-3xl font-black text-noc-cyan glow-text-cyan">{projectInfo.progress}%</span>
+                                            <span className="text-[9px] text-noc-textsec uppercase font-mono mt-1">COMPLETED</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-center gap-3 text-[9px] font-mono mt-2 flex-none">
+                                        <span className="flex items-center text-noc-cyan"><span className="w-2 h-2 rounded bg-noc-cyan mr-1"></span>เสร็จสิ้น {projectInfo.total > 0 ? ((projectInfo.installed/projectInfo.total)*100).toFixed(1) : 0}%</span>
+                                        <span className="flex items-center text-noc-orange"><span className="w-2 h-2 rounded bg-noc-orange mr-1"></span>รอติดตั้ง {projectInfo.total > 0 ? ((projectInfo.remaining/projectInfo.total)*100).toFixed(1) : 0}%</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Main Grid Layout */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 flex-1 min-h-0">
-                            
-                            {/* Left Column (KPIs & Charts) */}
-                            <div className="lg:col-span-8 flex flex-col space-y-4 lg:space-y-6 min-h-0">
-                                
-                                {/* KPIs */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-shrink-0">
-                                    <MetricCard 
-                                        title="เป้าหมายโคมไฟรวม" 
-                                        value={`${projectInfo.total}`} 
-                                        subtitle="ต้นทั้งหมด"
-                                        icon="Lightbulb"
-                                        colorClass="text-slate-800"
-                                        gradientClass="from-slate-700 to-slate-900"
-                                    />
-                                    <MetricCard 
-                                        title="ติดตั้งแล้วเสร็จ" 
-                                        value={`${projectInfo.installed}`}
-                                        subtitle="พร้อมใช้งาน" 
-                                        icon="CheckCircle2"
-                                        colorClass="text-amber-600"
-                                        gradientClass="from-amber-400 to-orange-500"
-                                    />
-                                    <MetricCard 
-                                        title="จำนวนคงเหลือ" 
-                                        value={`${projectInfo.remaining}`} 
-                                        subtitle="รอดำเนินการ"
-                                        icon="Clock"
-                                        colorClass="text-slate-600"
-                                        gradientClass="from-slate-400 to-slate-500"
-                                    />
-                                    <MetricCard 
-                                        title="ความคืบหน้า" 
-                                        value={`${projectInfo.progress}%`} 
-                                        subtitle="ภาพรวมโครงการ"
-                                        icon="Percent"
-                                        colorClass="text-emerald-600"
-                                        gradientClass="from-emerald-400 to-teal-500"
-                                    />
-                                </div>
-
-                                {/* Progress Bar - Premium Solar Style */}
-                                <div className="bg-white rounded-2xl p-6 shadow-lg shadow-slate-200/40 border border-slate-100 flex-shrink-0">
-                                    <div className="flex justify-between items-end mb-3">
-                                        <h3 className="font-semibold text-slate-800 flex items-center">
-                                            <Icon name="Sun" className="w-5 h-5 mr-2 text-amber-500" size={20} />
-                                            ความคืบหน้าโครงการทั้งหมด
-                                        </h3>
-                                        <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-orange-600">
-                                            {projectInfo.progress}%
-                                        </span>
-                                    </div>
-                                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden shadow-inner">
-                                        <div 
-                                            className="h-3 rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 transition-all duration-1000 ease-out relative"
-                                            style={{ width: `${projectInfo.progress}%` }}
-                                        >
-                                            <div className="absolute top-0 right-0 bottom-0 left-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGcgdHJhbnNmb3JtPSJyb3RhdGUoNDUpIj48bGluZSB4MT0iLTIwIiB5MT0iMCIgeDI9IjQwIiB5Mj0iMCIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMikiIHN0cm9rZS13aWR0aD0iNSIvPjwvZz48L3N2Zz4=')] opacity-50 animate-[slide_2s_linear_infinite]"></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Charts Area */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 flex-1 min-h-[300px]">
-                                    
-                                    {/* Donut Chart */}
-                                    <div className="bg-white rounded-2xl p-5 shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col items-center justify-center">
-                                        <h3 className="font-semibold text-slate-800 mb-2 w-full text-left">สัดส่วนงาน</h3>
-                                        <div className="flex-1 w-full relative">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <PieChart>
-                                                    <Pie
-                                                        data={pieData}
-                                                        cx="50%"
-                                                        cy="50%"
-                                                        innerRadius="65%"
-                                                        outerRadius="85%"
-                                                        paddingAngle={4}
-                                                        dataKey="value"
-                                                        stroke="none"
-                                                    >
-                                                        {pieData.map((entry, index) => (
-                                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                                        ))}
-                                                    </Pie>
-                                                    <RechartsTooltip 
-                                                        formatter={(value) => [`${value} ต้น`, 'จำนวน']}
-                                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                                    />
-                                                </PieChart>
-                                            </ResponsiveContainer>
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                                <span className="text-3xl font-bold text-slate-800">{projectInfo.total}</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex space-x-4 mt-2 text-xs">
-                                            <div className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 mr-1.5"></span>แล้วเสร็จ</div>
-                                            <div className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-slate-200 mr-1.5"></span>คงเหลือ</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Bar Chart */}
-                                    <div className="bg-white rounded-2xl p-5 shadow-lg shadow-slate-200/40 border border-slate-100 md:col-span-2 flex flex-col">
-                                        <h3 className="font-semibold text-slate-800 mb-4">จำแนกตามพื้นที่</h3>
-                                        <div className="flex-1 w-full">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart data={locationData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                    <XAxis dataKey="shortName" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
-                                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
-                                                    <RechartsTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}/>
-                                                    <Bar dataKey="installed" name="ติดตั้งแล้ว" stackId="a" fill="#f59e0b" radius={[0, 0, 4, 4]} />
-                                                    <Bar dataKey="remaining" name="คงเหลือ" stackId="a" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    </div>
+                        {/* CENTER: Main Analytics Chart (45%) */}
+                        <div className="lg:w-[45%] scada-panel flex flex-col min-h-0 flex-none lg:flex-1">
+                            <div className="bg-black/30 px-4 py-3 border-b border-white/5 flex justify-between items-center flex-none">
+                                <span className="text-[10px] font-bold tracking-widest text-noc-textsec">PERFORMANCE TREND & DEPLOYMENT</span>
+                                <div className="flex gap-3 text-[9px] font-mono">
+                                    <span className="flex items-center text-noc-cyan"><span className="w-2 h-2 rounded bg-noc-cyan mr-1"></span>TOTAL</span>
+                                    <span className="flex items-center text-noc-gold"><span className="w-2 h-2 rounded bg-noc-gold mr-1"></span>INSTALLED</span>
                                 </div>
                             </div>
+                            <div className="flex-1 w-full p-4 min-h-[250px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={locationData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#00F0FF" stopOpacity={0.3}/>
+                                                <stop offset="95%" stopColor="#00F0FF" stopOpacity={0}/>
+                                            </linearGradient>
+                                            <linearGradient id="colorInstalled" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#F6C453" stopOpacity={0.5}/>
+                                                <stop offset="95%" stopColor="#F6C453" stopOpacity={0}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                        <XAxis dataKey="shortName" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 9, fontFamily: 'monospace' }} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 9, fontFamily: 'monospace' }} />
+                                        <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(0,240,255,0.2)', strokeWidth: 2, strokeDasharray: '4 4' }}/>
+                                        
+                                        <Area type="monotone" dataKey="total" name="Total Nodes" stroke="#00F0FF" strokeWidth={2} fillOpacity={1} fill="url(#colorTotal)" />
+                                        <Area type="monotone" dataKey="installed" name="Active Nodes" stroke="#F6C453" strokeWidth={2} fillOpacity={1} fill="url(#colorInstalled)" />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
 
-                            {/* Right Column (Data Table) */}
-                            <div className="lg:col-span-4 bg-white rounded-2xl shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col h-[500px] lg:h-auto overflow-hidden">
-                                <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center flex-shrink-0">
-                                    <h3 className="font-semibold text-slate-800 flex items-center">
-                                        <Icon name="MapPin" className="w-4 h-4 mr-2 text-amber-500" size={16} />
-                                        ตารางสรุปรายพื้นที่
-                                    </h3>
-                                    <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">{locationData.length} พื้นที่</span>
+                        {/* RIGHT: TopN & Data Table (30%) */}
+                        <div className="lg:w-[30%] flex flex-col gap-3 min-h-0 flex-none lg:flex-1">
+                            
+                            {/* Data Table Full Height */}
+                            <div className="flex-1 scada-panel flex flex-col overflow-hidden">
+                                <div className="bg-black/30 px-4 py-3 border-b border-white/5 text-[10px] font-bold tracking-widest text-noc-textsec flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <Icon name="MapPin" size={14} className="text-noc-cyan" />
+                                        NODE STATUS DIRECTORY
+                                    </div>
+                                    <span className="text-noc-cyan bg-noc-cyan/10 px-2 py-0.5 rounded border border-noc-cyan/20">
+                                        {locationData.length} ZONES
+                                    </span>
                                 </div>
-                                <div className="flex-1 overflow-auto custom-scrollbar">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-slate-50/90 backdrop-blur-sm text-slate-600 font-medium sticky top-0 z-10 border-b border-slate-200">
+                                <div className="flex-1 overflow-auto custom-scrollbar relative">
+                                    <table className="w-full text-left font-mono">
+                                        <thead className="text-[9px] text-slate-500 uppercase sticky top-0 bg-[#0A1121] z-10 shadow-md">
                                             <tr>
-                                                <th className="px-4 py-3 whitespace-nowrap">พื้นที่</th>
-                                                <th className="px-4 py-3 text-center whitespace-nowrap">รวม</th>
-                                                <th className="px-4 py-3 text-center whitespace-nowrap">เสร็จ</th>
-                                                <th className="px-4 py-3 text-center whitespace-nowrap">สถานะ</th>
+                                                <th className="px-3 py-3 font-normal border-b border-white/10">Location</th>
+                                                <th className="px-2 py-3 text-right font-normal border-b border-white/10">Total</th>
+                                                <th className="px-2 py-3 text-right font-normal border-b border-white/10">Active</th>
+                                                <th className="px-2 py-3 text-center font-normal border-b border-white/10">Status</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-slate-100">
+                                        <tbody className="text-[10px]">
                                             {locationData.map((row) => {
-                                                const percentage = ((row.installed / row.total) * 100).toFixed(0);
-                                                const isComplete = row.installed === row.total;
+                                                const pct = row.total > 0 ? Math.round((row.installed/row.total)*100) : 0;
                                                 return (
-                                                    <tr key={row.id} className="hover:bg-amber-50/30 transition-colors">
-                                                        <td className="px-4 py-3 font-medium text-slate-700">
-                                                            <div className="max-w-[120px] truncate" title={row.name}>{row.shortName}</div>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center font-medium text-slate-600">{row.total}</td>
-                                                        <td className="px-4 py-3 text-center text-amber-600 font-semibold">{row.installed}</td>
-                                                        <td className="px-4 py-3 text-center">
-                                                            {isComplete ? (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
-                                                                    100%
-                                                                </span>
+                                                    <tr key={row.id} className="hover:bg-noc-cyan/10 transition-colors group cursor-default border-b border-white/5">
+                                                        <td className="px-3 py-3 text-slate-300 group-hover:text-white truncate max-w-[120px]">{row.shortName}</td>
+                                                        <td className="px-2 py-3 text-right text-slate-500">{row.total}</td>
+                                                        <td className="px-2 py-3 text-right font-bold text-noc-gold">{row.installed}</td>
+                                                        <td className="px-2 py-3 text-center">
+                                                            {pct === 100 ? (
+                                                                <span className="text-noc-green">OK</span>
                                                             ) : row.installed > 0 ? (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
-                                                                    {percentage}%
-                                                                </span>
+                                                                <span className="text-noc-orange">{pct}%</span>
                                                             ) : (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">
-                                                                    รอเริ่ม
-                                                                </span>
+                                                                <span className="text-slate-600">IDLE</span>
                                                             )}
                                                         </td>
                                                     </tr>
                                                 );
                                             })}
                                         </tbody>
+                                        <tfoot className="text-[10px] font-bold sticky bottom-0 bg-[#0A1121] shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                                            <tr>
+                                                <td className="px-3 py-3 text-noc-gold border-t border-white/10">TOTAL / รวมทั้งหมด</td>
+                                                <td className="px-2 py-3 text-right text-noc-gold border-t border-white/10">{projectInfo.total}</td>
+                                                <td className="px-2 py-3 text-right text-noc-gold border-t border-white/10">{projectInfo.installed}</td>
+                                                <td className="px-2 py-3 text-center text-noc-gold border-t border-white/10">
+                                                    {projectInfo.progress}%
+                                                </td>
+                                            </tr>
+                                        </tfoot>
                                     </table>
                                 </div>
                             </div>
                             
                         </div>
                     </div>
-                    <style dangerouslySetInnerHTML={{__html: `
-                        @keyframes slide {
-                            0% { background-position: 0 0; }
-                            100% { background-position: 40px 0; }
-                        }
-                    `}} />
                 </div>
             );
         };
